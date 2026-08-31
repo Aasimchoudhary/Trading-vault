@@ -251,6 +251,61 @@ LIMITEDS = [
 
 
 # =========================================================
+# 🎟️ GAMEPASSES
+# =========================================================
+
+GAMEPASSES = [
+
+    {
+        "name": "Extra Fruit Storage",
+        "value": 490_000_000,
+        "demand": 9.8,
+        "worthit": 10,
+        "robux": 400
+    },
+
+    {
+        "name": "2x Mastery and 2x Money",
+        "value": 510_000_000,
+        "demand": 9.1,
+        "worthit": 9.2,
+        "robux": 450
+    },
+
+    {
+        "name": "Fruit Notifier",
+        "value": 2_650_000_000,
+        "demand": 8.7,
+        "worthit": 4,
+        "robux": 2700
+    },
+
+    {
+        "name": "Dark Blade",
+        "value": 985_000_000,
+        "demand": 8.4,
+        "worthit": 6,
+        "robux": 1300
+    },
+
+    {
+        "name": "2x Boss Drops",
+        "value": 379_000_000,
+        "demand": 7,
+        "worthit": 9,
+        "robux": 350
+    },
+
+    {
+        "name": "Fast Boats",
+        "value": 289_000_000,
+        "demand": 6.9,
+        "worthit": 7,
+        "robux": 350
+    }
+]
+
+# =========================================================
 # COMBINE ITEMS
 # =========================================================
 
