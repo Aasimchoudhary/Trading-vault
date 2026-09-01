@@ -3,7 +3,7 @@ from google import genai
 from supabase import create_client
 
 # =========================================================
-# TRADING VAULT V3.3
+# TRADING VAULT V3.4
 # =========================================================
 
 st.set_page_config(
@@ -11,7 +11,6 @@ st.set_page_config(
     page_icon="🏦",
     layout="wide"
 )
-
 
 # =========================================================
 # FORMAT FUNCTIONS
@@ -236,16 +235,10 @@ LIMITEDS = [
     {"name": "Parrot Eagle", "value": 120_000_000, "demand": None},
     {"name": "Ruby Diamond", "value": 76_000_000, "demand": None},
     {"name": "Topaz Diamond", "value": 190_000_000, "demand": None},
-
-    # Fixed typo: 7,410,000,00 -> 741,000,000
     {"name": "Meme", "value": 741_000_000, "demand": None},
-
     {"name": "Eclipse", "value": 28_080_000_000, "demand": 10},
     {"name": "Matrix Eagle", "value": 640_000_000, "demand": None},
     {"name": "Requiem Eagle", "value": 150_000_000, "demand": 4},
-
-    # Removed duplicate Parrot Eagle
-
     {"name": "Empyrean Kitsune", "value": 10_450_000_000, "demand": None},
 ]
 
@@ -259,51 +252,52 @@ GAMEPASSES = [
     {
         "name": "Extra Fruit Storage",
         "value": 490_000_000,
+        "robux": 400,
         "demand": 9.8,
-        "worthit": 10,
-        "robux": 400
+        "worthit": 10.0
     },
 
     {
-        "name": "2x Mastery and 2x Money",
+        "name": "2x Mastery + 2x Money",
         "value": 510_000_000,
+        "robux": 450,
         "demand": 9.1,
-        "worthit": 9.2,
-        "robux": 450
+        "worthit": 9.2
     },
 
     {
         "name": "Fruit Notifier",
         "value": 2_650_000_000,
+        "robux": 2700,
         "demand": 8.7,
-        "worthit": 4,
-        "robux": 2700
+        "worthit": 4.0
     },
 
     {
         "name": "Dark Blade",
         "value": 985_000_000,
+        "robux": 1300,
         "demand": 8.4,
-        "worthit": 6,
-        "robux": 1300
+        "worthit": 6.0
     },
 
     {
         "name": "2x Boss Drops",
         "value": 379_000_000,
-        "demand": 7,
-        "worthit": 9,
-        "robux": 350
+        "robux": 350,
+        "demand": 7.0,
+        "worthit": 9.0
     },
 
     {
         "name": "Fast Boats",
         "value": 289_000_000,
+        "robux": 350,
         "demand": 6.9,
-        "worthit": 7,
-        "robux": 350
+        "worthit": 7.0
     }
 ]
+
 
 # =========================================================
 # COMBINE ITEMS
@@ -311,93 +305,208 @@ GAMEPASSES = [
 
 def get_all_items():
 
-    items = []
+    all_items = []
 
     for item in FRUITS:
-        x = item.copy()
-        x["category"] = "🍎 Fruit"
-        items.append(x)
+        new_item = item.copy()
+        new_item["category"] = "Fruit"
+        all_items.append(new_item)
 
     for item in PERMANENTS:
-        x = item.copy()
-        x["category"] = "♾️ Permanent"
-        items.append(x)
+        new_item = item.copy()
+        new_item["category"] = "Permanent"
+        all_items.append(new_item)
 
     for item in LIMITEDS:
-        x = item.copy()
-        x["category"] = "🏷️ Limited"
-        items.append(x)
+        new_item = item.copy()
+        new_item["category"] = "Limited"
+        all_items.append(new_item)
 
-    return items
+    for item in GAMEPASSES:
+        new_item = item.copy()
+        new_item["category"] = "Gamepass"
+        all_items.append(new_item)
 
+    return all_items
 
-# =========================================================
-# SORT
-# =========================================================
-
-def sort_items(items, sort_by):
-
-    if sort_by == "Highest Value":
-        return sorted(
-            items,
-            key=lambda x: x.get("value") or 0,
-            reverse=True
-        )
-
-    if sort_by == "Lowest Value":
-        return sorted(
-            items,
-            key=lambda x: x.get("value") or 0
-        )
-
-    return sorted(
-        items,
-        key=lambda x: x.get("name", "").lower()
-    )
 
 # =========================================================
-# SAFE FORMAT FUNCTIONS
+# SAFE FORMAT
 # =========================================================
 
 def safe_format_value(value):
-    if value is None:
-        return "N/A"
-
-    if value >= 1_000_000_000:
-        return f"{value / 1_000_000_000:.2f}B"
-
-    if value >= 1_000_000:
-        return f"{value / 1_000_000:.2f}M"
-
-    if value >= 1_000:
-        return f"{value / 1_000:.2f}K"
-
-    return str(value)
+    return format_value(value)
 
 
 def safe_format_demand(value):
-    if value is None:
-        return "N/A"
+    return format_demand(value)
 
-    return f"{value:g}/10"
 
 # =========================================================
-# 🔄 ADMIN RESET BACKUP
+# ORIGINAL VALUES BACKUP
 # =========================================================
 
 if "original_values" not in st.session_state:
 
     st.session_state.original_values = {}
 
-    for item in FRUITS + PERMANENTS + LIMITEDS:
+    for item in FRUITS + PERMANENTS + LIMITEDS + GAMEPASSES:
 
         st.session_state.original_values[
             item["name"].lower()
         ] = {
             "value": item.get("value"),
-            "demand": item.get("demand")
+            "demand": item.get("demand"),
+            "worthit": item.get("worthit"),
+            "robux": item.get("robux")
         }
 
+
+# =========================================================
+# SUPABASE
+# =========================================================
+
+def get_supabase_client():
+
+    try:
+
+        return create_client(
+            st.secrets["SUPABASE_URL"],
+            st.secrets["SUPABASE_KEY"]
+        )
+
+    except Exception as e:
+
+        st.error(
+            "❌ Supabase is not configured.\n\n"
+            "Add SUPABASE_URL and SUPABASE_KEY to Streamlit Secrets."
+        )
+
+        st.stop()
+
+
+supabase = get_supabase_client()
+
+
+def all_vault_items():
+    return FRUITS + PERMANENTS + LIMITEDS
+
+
+def db_category(item):
+
+    if item in FRUITS:
+        return "fruit"
+
+    if item in PERMANENTS:
+        return "permanent"
+
+    return "limited"
+
+
+def seed_database_if_empty():
+
+    try:
+
+        result = (
+            supabase
+            .table("trading_items")
+            .select("id")
+            .limit(1)
+            .execute()
+        )
+
+        if result.data:
+            return
+
+        rows = []
+
+        for item in all_vault_items():
+
+            rows.append({
+                "name": item["name"],
+                "category": db_category(item),
+                "value": item.get("value"),
+                "demand": item.get("demand")
+            })
+
+        if rows:
+            supabase.table("trading_items").insert(rows).execute()
+
+    except Exception as e:
+
+        st.error(
+            "❌ Could not initialize Trading Vault database.\n\n"
+            f"{e}"
+        )
+
+        st.stop()
+
+
+def load_database_values():
+
+    try:
+
+        result = (
+            supabase
+            .table("trading_items")
+            .select("name,value,demand")
+            .execute()
+        )
+
+        rows = result.data or []
+
+        db_items = {
+            str(row["name"]).strip().lower(): row
+            for row in rows
+        }
+
+        for item in all_vault_items():
+
+            row = db_items.get(
+                item["name"].strip().lower()
+            )
+
+            if row:
+
+                item["value"] = row.get("value")
+                item["demand"] = row.get("demand")
+
+    except Exception as e:
+
+        st.error(
+            "❌ Could not load Trading Vault database.\n\n"
+            f"{e}"
+        )
+
+        st.stop()
+
+
+def save_item_permanently(item):
+
+    result = (
+        supabase
+        .table("trading_items")
+        .update({
+            "value": item.get("value"),
+            "demand": item.get("demand")
+        })
+        .eq("name", item["name"])
+        .execute()
+    )
+
+    if not result.data:
+
+        raise RuntimeError(
+            f"No database row was updated for {item['name']}."
+        )
+
+
+# =========================================================
+# DATABASE INITIALIZATION
+# =========================================================
+
+seed_database_if_empty()
+load_database_values()
 
 
 # =========================================================
@@ -409,11 +518,12 @@ page = st.sidebar.radio(
     [
         "🍎 Fruits",
         "♾️ Permanents",
+        "🎟️ Gamepasses",
         "🏷️ Limiteds",
         "🤝 Trade Calculator",
         "📈 Market",
         "🤖 AI Assistant",
-        "🔐 Admin Panel",
+        "🔐 Admin Panel"
     ]
 )
 
@@ -430,150 +540,35 @@ sort_by = st.sidebar.selectbox(
 
 
 # =========================================================
+# SORT
+# =========================================================
+
+def sort_items(items, sort_by):
+
+    if sort_by == "Highest Value":
+
+        return sorted(
+            items,
+            key=lambda x: x.get("value") or 0,
+            reverse=True
+        )
+
+    if sort_by == "Lowest Value":
+
+        return sorted(
+            items,
+            key=lambda x: x.get("value") or 0
+        )
+
+    return sorted(
+        items,
+        key=lambda x: x.get("name", "").lower()
+    )
+
+
+# =========================================================
 # 🍎 FRUITS
 # =========================================================
-
-
-# =========================================================
-# 🗄️ TRADING VAULT DATABASE — SUPABASE
-# =========================================================
-
-# Supabase is the permanent source of truth for values/demand.
-# The hardcoded lists above are used only to seed a brand-new table.
-
-def get_supabase_client():
-    try:
-        return create_client(
-            st.secrets["SUPABASE_URL"],
-            st.secrets["SUPABASE_KEY"],
-        )
-    except Exception as e:
-        st.error(
-            "❌ Supabase is not configured.\n\n"
-            "Add SUPABASE_URL and SUPABASE_KEY to Streamlit Secrets."
-        )
-        st.stop()
-
-
-supabase = get_supabase_client()
-
-
-def all_vault_items():
-    return FRUITS + PERMANENTS + LIMITEDS
-
-
-def db_category(item):
-    if item in FRUITS:
-        return "fruit"
-    if item in PERMANENTS:
-        return "permanent"
-    return "limited"
-
-
-def seed_database_if_empty():
-    try:
-        result = (
-            supabase
-            .table("trading_items")
-            .select("id")
-            .limit(1)
-            .execute()
-        )
-
-        # IMPORTANT:
-        # If rows already exist, do NOT overwrite them with the
-        # hardcoded values.
-        if result.data:
-            return
-
-        rows = []
-
-        for item in all_vault_items():
-            rows.append({
-                "name": item["name"],
-                "category": db_category(item),
-                "value": item.get("value"),
-                "demand": item.get("demand"),
-            })
-
-        supabase.table("trading_items").insert(rows).execute()
-
-    except Exception as e:
-        st.error(
-            "❌ Could not initialize Trading Vault database.\n\n"
-            f"{e}"
-        )
-        st.stop()
-
-
-def load_database_values():
-    try:
-        result = (
-            supabase
-            .table("trading_items")
-            .select("name,value,demand")
-            .execute()
-        )
-
-        rows = result.data or []
-
-        db_items = {
-            str(row["name"]).strip().lower(): row
-            for row in rows
-        }
-
-        for item in all_vault_items():
-            row = db_items.get(item["name"].strip().lower())
-
-            if row:
-                item["value"] = row.get("value")
-                item["demand"] = row.get("demand")
-
-    except Exception as e:
-        st.error(
-            "❌ Could not load Trading Vault database.\n\n"
-            f"{e}"
-        )
-        st.stop()
-
-
-def save_item_permanently(item):
-    result = (
-        supabase
-        .table("trading_items")
-        .update({
-            "value": item.get("value"),
-            "demand": item.get("demand"),
-        })
-        .eq("name", item["name"])
-        .execute()
-    )
-
-    if not result.data:
-        raise RuntimeError(
-            f"No database row was updated for {item['name']}."
-        )
-
-
-def reset_item_permanently(item):
-    original = st.session_state.original_values.get(
-        item["name"].lower()
-    )
-
-    if original is None:
-        raise RuntimeError(
-            f"No original value backup exists for {item['name']}."
-        )
-
-    item["value"] = original["value"]
-    item["demand"] = original["demand"]
-
-    save_item_permanently(item)
-
-
-# Initialize once if necessary, then ALWAYS load the database.
-seed_database_if_empty()
-load_database_values()
 
 if page == "🍎 Fruits":
 
@@ -582,6 +577,7 @@ if page == "🍎 Fruits":
     items = FRUITS.copy()
 
     if search:
+
         items = [
             x for x in items
             if search.lower() in x["name"].lower()
@@ -598,7 +594,11 @@ if page == "🍎 Fruits":
             c1, c2, c3 = st.columns([4, 2, 2])
 
             with c1:
-                st.subheader(f'🍎 {item["name"]}')
+
+                st.subheader(
+                    f'🍎 {item["name"]}'
+                )
+
                 st.caption(
                     f'{item.get("rarity", "Unknown")} • '
                     f'{item.get("type", "Unknown")} • '
@@ -606,12 +606,14 @@ if page == "🍎 Fruits":
                 )
 
             with c2:
+
                 st.metric(
                     "Value",
                     format_value(item.get("value"))
                 )
 
             with c3:
+
                 st.metric(
                     "Demand",
                     format_demand(item.get("demand"))
@@ -629,6 +631,7 @@ elif page == "♾️ Permanents":
     items = PERMANENTS.copy()
 
     if search:
+
         items = [
             x for x in items
             if search.lower() in x["name"].lower()
@@ -636,36 +639,121 @@ elif page == "♾️ Permanents":
 
     items = sort_items(items, sort_by)
 
-    st.success(f"{len(items)} permanent fruits loaded")
+    st.success(
+        f"{len(items)} permanent fruits loaded"
+    )
 
     for item in items:
 
         with st.container(border=True):
 
-            c1, c2, c3, c4 = st.columns([4, 2, 2, 2])
+            c1, c2, c3, c4 = st.columns(
+                [4, 2, 2, 2]
+            )
 
             with c1:
-                st.subheader(f'♾️ {item["name"]}')
+
+                st.subheader(
+                    f'♾️ {item["name"]}'
+                )
+
                 st.caption("Permanent Fruit")
 
             with c2:
+
                 st.metric(
                     "Perm Value",
                     format_value(item.get("value"))
                 )
 
             with c3:
+
                 st.metric(
                     "Demand",
                     format_demand(item.get("demand"))
                 )
 
             with c4:
+
                 robux = item.get("robux")
 
                 st.metric(
                     "Robux",
-                    f"{robux:,} R$" if robux is not None else "N/A"
+                    f"{robux:,} R$"
+                    if robux is not None
+                    else "N/A"
+                )
+
+
+# =========================================================
+# 🎟️ GAMEPASSES
+# =========================================================
+
+elif page == "🎟️ Gamepasses":
+
+    st.header("🎟️ Gamepasses")
+
+    st.caption(
+        "Gamepass values, demand, Robux price and Worth It rating."
+    )
+
+    items = GAMEPASSES.copy()
+
+    if search:
+
+        items = [
+            x for x in items
+            if search.lower() in x["name"].lower()
+        ]
+
+    items = sort_items(items, sort_by)
+
+    st.success(
+        f"{len(items)} gamepasses loaded"
+    )
+
+    for item in items:
+
+        with st.container(border=True):
+
+            c1, c2, c3, c4, c5 = st.columns(
+                [3.5, 1.5, 1.5, 1.5, 1.5]
+            )
+
+            with c1:
+
+                st.subheader(
+                    f'🎟️ {item["name"]}'
+                )
+
+                st.caption("Gamepass")
+
+            with c2:
+
+                st.metric(
+                    "💎 Value",
+                    format_value(item.get("value"))
+                )
+
+            with c3:
+
+                st.metric(
+                    "🔥 Demand",
+                    format_demand(item.get("demand"))
+                )
+
+            with c4:
+
+                st.metric(
+                    "⭐ Worth It",
+                    f'{item.get("worthit", "N/A")}/10'
+                )
+
+            with c5:
+
+                st.metric(
+                    "💰 Robux",
+                    f'{item.get("robux", 0):,} R$'
                 )
 
 
@@ -680,6 +768,7 @@ elif page == "🏷️ Limiteds":
     items = LIMITEDS.copy()
 
     if search:
+
         items = [
             x for x in items
             if search.lower() in x["name"].lower()
@@ -687,35 +776,47 @@ elif page == "🏷️ Limiteds":
 
     items = sort_items(items, sort_by)
 
-    st.success(f"{len(items)} limiteds loaded")
+    st.success(
+        f"{len(items)} limiteds loaded"
+    )
 
     for item in items:
 
         with st.container(border=True):
 
-            c1, c2, c3, c4 = st.columns([4, 2, 2, 2])
+            c1, c2, c3, c4 = st.columns(
+                [4, 2, 2, 2]
+            )
 
             with c1:
-                st.subheader(f'🏷️ {item["name"]}')
+
+                st.subheader(
+                    f'🏷️ {item["name"]}'
+                )
+
                 st.caption("Limited")
 
             with c2:
+
                 st.metric(
                     "Value",
                     format_value(item.get("value"))
                 )
 
             with c3:
+
                 st.metric(
                     "Demand",
                     format_demand(item.get("demand"))
                 )
 
             with c4:
+
                 st.metric(
                     "Status",
                     "✅ Tradeable"
                 )
+
 
 # =========================================================
 # 🤝 TRADE CALCULATOR
@@ -729,8 +830,6 @@ elif page == "🤝 Trade Calculator":
         "Compare the total value of both sides of a trade."
     )
 
-    trade_items = get_all_items()
-
     # -----------------------------------------------------
     # SESSION STATE
     # -----------------------------------------------------
@@ -742,20 +841,23 @@ elif page == "🤝 Trade Calculator":
         st.session_state.their_trade = []
 
     # -----------------------------------------------------
-    # OPTIONS
+    # TRADE ITEMS
     # -----------------------------------------------------
 
+    trade_items = get_all_items()
+
     trade_options = [
-        f'{item["name"]} • {item["category"]} • '
+        f'{item["name"]} • '
+        f'{item["category"]} • '
         f'{format_value(item.get("value"))}'
         for item in trade_items
     ]
 
-    left, right = st.columns(2)
+    # -----------------------------------------------------
+    # SELECT ITEMS
+    # -----------------------------------------------------
 
-    # =====================================================
-    # YOUR SIDE
-    # =====================================================
+    left, right = st.columns(2)
 
     with left:
 
@@ -772,17 +874,15 @@ elif page == "🤝 Trade Calculator":
             use_container_width=True
         ):
 
-            index = trade_options.index(your_selection)
+            index = trade_options.index(
+                your_selection
+            )
 
             st.session_state.your_trade.append(
                 trade_items[index].copy()
             )
 
             st.rerun()
-
-    # =====================================================
-    # THEIR SIDE
-    # =====================================================
 
     with right:
 
@@ -799,7 +899,9 @@ elif page == "🤝 Trade Calculator":
             use_container_width=True
         ):
 
-            index = trade_options.index(their_selection)
+            index = trade_options.index(
+                their_selection
+            )
 
             st.session_state.their_trade.append(
                 trade_items[index].copy()
@@ -808,7 +910,7 @@ elif page == "🤝 Trade Calculator":
             st.rerun()
 
     # -----------------------------------------------------
-    # TOTAL
+    # TOTAL FUNCTION
     # -----------------------------------------------------
 
     def trade_total(items):
@@ -828,9 +930,9 @@ elif page == "🤝 Trade Calculator":
 
     st.divider()
 
-    # =====================================================
-    # YOUR OFFER DISPLAY
-    # =====================================================
+    # -----------------------------------------------------
+    # YOUR ITEMS
+    # -----------------------------------------------------
 
     left, right = st.columns(2)
 
@@ -851,7 +953,11 @@ elif page == "🤝 Trade Calculator":
                 c1, c2 = st.columns([5, 1])
 
                 with c1:
-                    st.write(f'**{item["name"]}**')
+
+                    st.write(
+                        f'**{item["name"]}**'
+                    )
+
                     st.caption(
                         f'{item["category"]} • '
                         f'{format_value(item.get("value"))}'
@@ -872,9 +978,9 @@ elif page == "🤝 Trade Calculator":
             format_value(your_total)
         )
 
-    # =====================================================
-    # THEIR OFFER DISPLAY
-    # =====================================================
+    # -----------------------------------------------------
+    # THEIR ITEMS
+    # -----------------------------------------------------
 
     with right:
 
@@ -893,7 +999,11 @@ elif page == "🤝 Trade Calculator":
                 c1, c2 = st.columns([5, 1])
 
                 with c1:
-                    st.write(f'**{item["name"]}**')
+
+                    st.write(
+                        f'**{item["name"]}**'
+                    )
+
                     st.caption(
                         f'{item["category"]} • '
                         f'{format_value(item.get("value"))}'
@@ -914,9 +1024,9 @@ elif page == "🤝 Trade Calculator":
             format_value(their_total)
         )
 
-    # =====================================================
-    # CLEAR
-    # =====================================================
+    # -----------------------------------------------------
+    # CLEAR BUTTONS
+    # -----------------------------------------------------
 
     st.divider()
 
@@ -942,9 +1052,9 @@ elif page == "🤝 Trade Calculator":
             st.session_state.their_trade = []
             st.rerun()
 
-    # =====================================================
+    # -----------------------------------------------------
     # RESULT
-    # =====================================================
+    # -----------------------------------------------------
 
     if your_total > 0 and their_total > 0:
 
@@ -961,36 +1071,38 @@ elif page == "🤝 Trade Calculator":
         c1, c2, c3 = st.columns(3)
 
         with c1:
+
             st.metric(
                 "🟦 Your Value",
                 format_value(your_total)
             )
 
         with c2:
+
             st.metric(
                 "🟥 Their Value",
                 format_value(their_total)
             )
 
         with c3:
+
             st.metric(
                 "Difference",
                 format_value(abs(difference))
             )
-
-        # -------------------------------------------------
-        # RESULT
-        # -------------------------------------------------
 
         if their_total > your_total:
 
             ratio = their_total / your_total
 
             if ratio >= 1.15:
+
                 st.success(
                     "🏆 BIG WIN — You are receiving significantly more value!"
                 )
+
             else:
+
                 st.info(
                     "🟢 WIN — You are receiving more value."
                 )
@@ -1000,10 +1112,13 @@ elif page == "🤝 Trade Calculator":
             ratio = your_total / their_total
 
             if ratio >= 1.15:
+
                 st.error(
                     "❌ BIG LOSS — You are giving significantly more value!"
                 )
+
             else:
+
                 st.warning(
                     "🟡 SLIGHT LOSS — You are giving slightly more value."
                 )
@@ -1049,21 +1164,19 @@ elif page == "📈 Market":
         if x.get("demand") is not None
     ]
 
-    # =====================================================
-    # OVERVIEW
-    # =====================================================
-
     st.subheader("📊 Market Overview")
 
     m1, m2, m3, m4 = st.columns(4)
 
     with m1:
+
         st.metric(
             "Items Tracked",
             len(market_items)
         )
 
     with m2:
+
         st.metric(
             "Items With Values",
             len(valued_items)
@@ -1071,35 +1184,45 @@ elif page == "📈 Market":
 
     with m3:
 
-        highest = max(
-            valued_items,
-            key=lambda x: x["value"]
-        )
+        if valued_items:
 
-        st.metric(
-            "Highest Value",
-            format_value(highest["value"])
-        )
+            highest = max(
+                valued_items,
+                key=lambda x: x["value"]
+            )
 
-        st.caption(highest["name"])
+            st.metric(
+                "Highest Value",
+                format_value(highest["value"])
+            )
+
+            st.caption(
+                highest["name"]
+            )
 
     with m4:
 
-        highest_demand = max(
-            demanded_items,
-            key=lambda x: x["demand"]
-        )
+        if demanded_items:
 
-        st.metric(
-            "Highest Demand",
-            format_demand(highest_demand["demand"])
-        )
+            highest_demand = max(
+                demanded_items,
+                key=lambda x: x["demand"]
+            )
 
-        st.caption(highest_demand["name"])
+            st.metric(
+                "Highest Demand",
+                format_demand(
+                    highest_demand["demand"]
+                )
+            )
 
-    # =====================================================
+            st.caption(
+                highest_demand["name"]
+            )
+
+    # -----------------------------------------------------
     # TOP VALUE
-    # =====================================================
+    # -----------------------------------------------------
 
     st.divider()
 
@@ -1111,7 +1234,10 @@ elif page == "📈 Market":
         reverse=True
     )[:10]
 
-    for rank, item in enumerate(top_value, 1):
+    for rank, item in enumerate(
+        top_value,
+        1
+    ):
 
         c1, c2, c3 = st.columns([1, 5, 2])
 
@@ -1119,19 +1245,24 @@ elif page == "📈 Market":
             st.write(f"**#{rank}**")
 
         with c2:
+
             st.write(
                 f'**{item["name"]}**'
             )
-            st.caption(item["category"])
+
+            st.caption(
+                item["category"]
+            )
 
         with c3:
+
             st.write(
                 f'💰 **{format_value(item["value"])}**'
             )
 
-    # =====================================================
+    # -----------------------------------------------------
     # DEMAND
-    # =====================================================
+    # -----------------------------------------------------
 
     st.divider()
 
@@ -1143,7 +1274,10 @@ elif page == "📈 Market":
         reverse=True
     )[:10]
 
-    for rank, item in enumerate(top_demand, 1):
+    for rank, item in enumerate(
+        top_demand,
+        1
+    ):
 
         c1, c2, c3 = st.columns([1, 5, 2])
 
@@ -1151,32 +1285,33 @@ elif page == "📈 Market":
             st.write(f"**#{rank}**")
 
         with c2:
+
             st.write(
                 f'**{item["name"]}**'
             )
-            st.caption(item["category"])
+
+            st.caption(
+                item["category"]
+            )
 
         with c3:
+
             st.write(
                 f'🔥 **{format_demand(item["demand"])}**'
             )
 
-    # =====================================================
-    # MARKET SIGNALS
-    # =====================================================
+    # -----------------------------------------------------
+    # SIGNALS
+    # -----------------------------------------------------
 
     st.divider()
 
     st.subheader("🔮 Market Signals")
 
     st.info(
-        "These signals are based on the current value and demand data. "
-        "They are NOT historical price predictions yet."
+        "These signals are based on current value and demand data. "
+        "They are NOT historical price predictions."
     )
-
-    # -----------------------------------------------------
-    # POTENTIAL RISERS
-    # -----------------------------------------------------
 
     potential_risers = [
         x for x in demanded_items
@@ -1191,10 +1326,6 @@ elif page == "📈 Market":
         ),
         reverse=True
     )[:10]
-
-    # -----------------------------------------------------
-    # POTENTIAL FALLERS
-    # -----------------------------------------------------
 
     potential_fallers = [
         x for x in demanded_items
@@ -1241,9 +1372,9 @@ elif page == "📈 Market":
                 f'Value {format_value(item["value"])}'
             )
 
-    # =====================================================
-    # HIGH VALUE + LOW DEMAND
-    # =====================================================
+    # -----------------------------------------------------
+    # HIGH VALUE LOW DEMAND
+    # -----------------------------------------------------
 
     st.divider()
 
@@ -1266,8 +1397,8 @@ elif page == "📈 Market":
 
             st.write(
                 f'⚠️ **{item["name"]}** — '
-                f'{format_value(item["value"])} '
-                f'• Demand {format_demand(item["demand"])}'
+                f'{format_value(item["value"])} • '
+                f'Demand {format_demand(item["demand"])}'
             )
 
     else:
@@ -1276,9 +1407,9 @@ elif page == "📈 Market":
             "No high-value / low-demand items detected."
         )
 
-    # =====================================================
-    # HIGH DEMAND + LOWER VALUE
-    # =====================================================
+    # -----------------------------------------------------
+    # HIGH DEMAND LOWER VALUE
+    # -----------------------------------------------------
 
     st.divider()
 
@@ -1298,12 +1429,13 @@ elif page == "📈 Market":
 
         st.write(
             f'💎 **{item["name"]}** — '
-            f'{format_value(item["value"])} '
-            f'• Demand {format_demand(item["demand"])}'
+            f'{format_value(item["value"])} • '
+            f'Demand {format_demand(item["demand"])}'
         )
 
+
 # =========================================================
-# 🤖 AI ASSISTANT — TRADING VAULT V3.3
+# 🤖 AI ASSISTANT
 # =========================================================
 
 elif page == "🤖 AI Assistant":
@@ -1314,15 +1446,7 @@ elif page == "🤖 AI Assistant":
         "Your Blox Fruits trading assistant — powered by your Vault data."
     )
 
-    # =====================================================
-    # BUILD DATABASE FOR AI
-    # =====================================================
-
     ai_items = []
-
-    # -----------------------------------------------------
-    # REGULAR FRUITS
-    # -----------------------------------------------------
 
     for item in FRUITS:
 
@@ -1336,10 +1460,6 @@ elif page == "🤖 AI Assistant":
             "role": item.get("role")
         })
 
-    # -----------------------------------------------------
-    # PERMANENTS
-    # -----------------------------------------------------
-
     for item in PERMANENTS:
 
         ai_items.append({
@@ -1350,24 +1470,25 @@ elif page == "🤖 AI Assistant":
             "robux": item.get("robux")
         })
 
-    # -----------------------------------------------------
-    # LIMITEDS
-    # -----------------------------------------------------
-
     for item in LIMITEDS:
 
         ai_items.append({
             "name": item.get("name"),
             "category": "Limited",
             "value": item.get("value"),
-            "demand": item.get("demand"),
-            "status": item.get("status"),
-            "tradeable": item.get("tradeable")
+            "demand": item.get("demand")
         })
 
-    # =====================================================
-    # CREATE AI DATABASE TEXT
-    # =====================================================
+    for item in GAMEPASSES:
+
+        ai_items.append({
+            "name": item.get("name"),
+            "category": "Gamepass",
+            "value": item.get("value"),
+            "demand": item.get("demand"),
+            "robux": item.get("robux"),
+            "worthit": item.get("worthit")
+        })
 
     database_text = ""
 
@@ -1392,16 +1513,14 @@ Demand: {safe_format_demand(item.get("demand"))}
         if item.get("robux") is not None:
             database_text += f"Robux: {item.get('robux')}\n"
 
-        if item.get("tradeable") is not None:
-            database_text += (
-                f"Tradeable: {item.get('tradeable')}\n"
-            )
+        if item.get("worthit") is not None:
+            database_text += f"Worth It: {item.get('worthit')}/10\n"
 
         database_text += "\n"
 
-    # =====================================================
+    # -----------------------------------------------------
     # API KEY
-    # =====================================================
+    # -----------------------------------------------------
 
     api_key = None
 
@@ -1413,12 +1532,9 @@ Demand: {safe_format_demand(item.get("demand"))}
 
         try:
             api_key = st.secrets["gemini"]["api_key"]
+
         except Exception:
             api_key = None
-
-    # =====================================================
-    # NO API KEY
-    # =====================================================
 
     if not api_key:
 
@@ -1437,9 +1553,9 @@ Demand: {safe_format_demand(item.get("demand"))}
 
         st.stop()
 
-    # =====================================================
-    # CREATE CLIENT
-    # =====================================================
+    # -----------------------------------------------------
+    # CLIENT
+    # -----------------------------------------------------
 
     try:
 
@@ -1455,17 +1571,13 @@ Demand: {safe_format_demand(item.get("demand"))}
 
         st.stop()
 
-    # =====================================================
-    # SESSION CHAT HISTORY
-    # =====================================================
+    # -----------------------------------------------------
+    # CHAT HISTORY
+    # -----------------------------------------------------
 
     if "ai_messages" not in st.session_state:
 
         st.session_state.ai_messages = []
-
-    # =====================================================
-    # WELCOME MESSAGE
-    # =====================================================
 
     if not st.session_state.ai_messages:
 
@@ -1485,10 +1597,6 @@ Demand: {safe_format_demand(item.get("demand"))}
             )
         })
 
-    # =====================================================
-    # DISPLAY CHAT
-    # =====================================================
-
     for message in st.session_state.ai_messages:
 
         with st.chat_message(
@@ -1499,19 +1607,11 @@ Demand: {safe_format_demand(item.get("demand"))}
                 message["content"]
             )
 
-    # =====================================================
-    # CHAT INPUT
-    # =====================================================
-
     user_prompt = st.chat_input(
         "Ask Trading Vault AI..."
     )
 
     if user_prompt:
-
-        # -------------------------------------------------
-        # SHOW USER MESSAGE
-        # -------------------------------------------------
 
         st.session_state.ai_messages.append({
             "role": "user",
@@ -1524,24 +1624,14 @@ Demand: {safe_format_demand(item.get("demand"))}
                 user_prompt
             )
 
-        # -------------------------------------------------
-        # BUILD CONVERSATION
-        # -------------------------------------------------
-
         conversation = ""
 
         for message in st.session_state.ai_messages[-12:]:
 
-            role = message["role"].upper()
-
             conversation += (
-                f"{role}: "
-                f"{message['content']}\n\n"
+                f'{message["role"].upper()}: '
+                f'{message["content"]}\n\n'
             )
-
-        # -------------------------------------------------
-        # AI SYSTEM INSTRUCTIONS
-        # -------------------------------------------------
 
         system_instruction = f"""
 You are Trading Vault AI.
@@ -1555,40 +1645,25 @@ IMPORTANT RULES:
 2. NEVER invent an item's value if it exists in the database.
 
 3. If an item is not in the database, clearly say:
-   "I don't have that item in the current Vault database."
+"I don't have that item in the current Vault database."
 
 4. Values are trading values, not Robux prices.
 
 5. Demand is represented from 0 to 10.
 
 6. When analyzing trades:
-   - Calculate the total value of each side.
-   - Compare both sides.
-   - Explain whether the trade is approximately:
-     WIN, FAIR, or LOSS.
-   - Mention demand when relevant.
+- Calculate total value of each side.
+- Compare both sides.
+- Explain whether the trade is WIN, FAIR, or LOSS.
+- Mention demand when relevant.
 
-7. Do not claim that a prediction is guaranteed.
+7. Do not claim predictions are guaranteed.
 
-8. Market predictions are estimates based on current value,
-   demand, rarity, category and available Vault information.
+8. Market predictions are estimates based on current data.
 
-9. If the user asks whether an item may rise:
-   explain the factors that could cause it to rise.
+9. Do not pretend the Vault has historical prices unless historical data exists.
 
-10. If the user asks whether an item may fall:
-    explain the factors that could cause it to fall.
-
-11. Be concise but useful.
-
-12. Do not pretend that the Vault has historical prices
-    unless historical data is actually provided.
-
-13. If the user asks about historical movement and the Vault
-    does not have historical data, clearly say that historical
-    tracking has not been added yet.
-
-14. You are NOT the official Blox Fruits developer.
+10. You are NOT the official Blox Fruits developer.
 
 TRADING VAULT DATABASE:
 
@@ -1598,10 +1673,6 @@ CURRENT CONVERSATION:
 
 {conversation}
 """
-
-        # -------------------------------------------------
-        # ASK AI
-        # -------------------------------------------------
 
         try:
 
@@ -1626,10 +1697,6 @@ CURRENT CONVERSATION:
                         answer
                     )
 
-            # -------------------------------------------------
-            # SAVE RESPONSE
-            # -------------------------------------------------
-
             st.session_state.ai_messages.append({
                 "role": "assistant",
                 "content": answer
@@ -1637,19 +1704,13 @@ CURRENT CONVERSATION:
 
         except Exception as e:
 
-            error_text = str(e)
-
             st.error(
                 "❌ AI request failed."
             )
 
             st.code(
-                error_text
+                str(e)
             )
-
-    # =====================================================
-    # CONTROLS
-    # =====================================================
 
     st.divider()
 
@@ -1673,23 +1734,24 @@ CURRENT CONVERSATION:
             len(ai_items)
         )
 
+
 # =========================================================
-# 🔐 ADMIN PANEL — V3.4
+# 🔐 ADMIN PANEL
 # =========================================================
 
 elif page == "🔐 Admin Panel":
 
     st.header("🔐 Admin Panel")
-    st.caption(
-        "Administrator controls — database changes are permanent."
-    )
 
-    # =====================================================
-    # ADMIN LOGIN STATE
-    # =====================================================
+    st.caption(
+        "Trading Vault administrator controls."
+    )
 
     if "admin_logged_in" not in st.session_state:
         st.session_state.admin_logged_in = False
+
+    if "admin_overrides" not in st.session_state:
+        st.session_state.admin_overrides = {}
 
     # =====================================================
     # LOGIN
@@ -1712,35 +1774,48 @@ elif page == "🔐 Admin Panel":
         ):
 
             try:
-                correct_password = st.secrets["ADMIN_PASSWORD"]
+
+                correct_password = st.secrets[
+                    "ADMIN_PASSWORD"
+                ]
 
                 if password == correct_password:
 
                     st.session_state.admin_logged_in = True
+
                     st.session_state.pop(
                         "admin_password_input",
                         None
                     )
 
-                    st.success("✅ Admin login successful!")
+                    st.success(
+                        "✅ Admin login successful!"
+                    )
+
                     st.rerun()
 
                 else:
-                    st.error("❌ Incorrect admin password.")
 
-            except Exception as e:
+                    st.error(
+                        "❌ Incorrect admin password."
+                    )
+
+            except Exception:
+
                 st.error(
                     "⚠️ ADMIN_PASSWORD is not configured "
                     "in Streamlit Secrets."
                 )
 
     # =====================================================
-    # ADMIN DASHBOARD
+    # DASHBOARD
     # =====================================================
 
     else:
 
-        st.success("🟢 Access Granted")
+        st.success(
+            "🟢 Access Granted"
+        )
 
         if st.button(
             "🚪 Logout",
@@ -1749,9 +1824,43 @@ elif page == "🔐 Admin Panel":
         ):
 
             st.session_state.admin_logged_in = False
+
             st.rerun()
 
         st.divider()
+
+        all_items = (
+            FRUITS
+            + PERMANENTS
+            + LIMITEDS
+            + GAMEPASSES
+        )
+
+        # =================================================
+        # APPLY OVERRIDES
+        # =================================================
+
+        for item in all_items:
+
+            item_key = item["name"].lower()
+
+            if item_key in st.session_state.admin_overrides:
+
+                override = (
+                    st.session_state
+                    .admin_overrides[item_key]
+                )
+
+                for field in [
+                    "value",
+                    "demand",
+                    "worthit",
+                    "robux"
+                ]:
+
+                    if field in override:
+
+                        item[field] = override[field]
 
         # =================================================
         # COMMAND CENTER
@@ -1767,6 +1876,10 @@ elif page == "🔐 Admin Panel":
 
 `/set ITEM demand NUMBER`
 
+`/set ITEM worthit NUMBER`
+
+`/set ITEM robux NUMBER`
+
 `/reset ITEM`
 
 `/reset all`
@@ -1777,9 +1890,13 @@ elif page == "🔐 Admin Panel":
 
 `/set Kitsune demand 9`
 
-`/set Galaxy Empyrean Kitsune 10B`
+`/set Extra Fruit Storage 500M`
 
-`/set Galaxy Empyrean Kitsune demand 8`
+`/set Extra Fruit Storage demand 9.8`
+
+`/set Extra Fruit Storage worthit 10`
+
+`/set Extra Fruit Storage robux 400`
 
 `/reset Kitsune`
 
@@ -1803,47 +1920,73 @@ elif page == "🔐 Admin Panel":
 
             if not command:
 
-                st.warning("Enter a command first.")
+                st.warning(
+                    "Enter a command first."
+                )
 
             else:
 
                 parts = command.split()
-                command_name = parts[0].lower()
-                all_items = all_vault_items()
 
-                # =========================================
+                command_name = parts[0].lower()
+
+                # =================================================
                 # /SET
-                # =========================================
+                # =================================================
 
                 if command_name == "/set":
 
                     if len(parts) < 3:
 
-                        st.error("❌ Usage: /set ITEM VALUE")
-
-                    # -------------------------------------
-                    # DEMAND
-                    # -------------------------------------
-
-                    elif (
-                        len(parts) >= 4
-                        and parts[-2].lower() == "demand"
-                    ):
-
-                        item_name = " ".join(
-                            parts[1:-2]
-                        ).strip()
-
-                        demand_text = parts[-1].strip()
-
-                        item = next(
-                            (
-                                x for x in all_items
-                                if x["name"].lower()
-                                == item_name.lower()
-                            ),
-                            None
+                        st.error(
+                            "❌ Invalid command."
                         )
+
+                    else:
+
+                        property_name = None
+
+                        if (
+                            len(parts) >= 4
+                            and parts[-2].lower()
+                            in [
+                                "demand",
+                                "worthit",
+                                "robux"
+                            ]
+                        ):
+
+                            property_name = (
+                                parts[-2].lower()
+                            )
+
+                            item_name = " ".join(
+                                parts[1:-2]
+                            ).strip()
+
+                            value_text = parts[-1].strip()
+
+                        else:
+
+                            property_name = "value"
+
+                            item_name = " ".join(
+                                parts[1:-1]
+                            ).strip()
+
+                            value_text = parts[-1].strip()
+
+                        item = None
+
+                        for x in all_items:
+
+                            if (
+                                x.get("name", "").lower()
+                                == item_name.lower()
+                            ):
+
+                                item = x
+                                break
 
                         if item is None:
 
@@ -1853,150 +1996,222 @@ elif page == "🔐 Admin Panel":
 
                         else:
 
-                            try:
+                            item_key = (
+                                item["name"].lower()
+                            )
 
-                                new_demand = float(demand_text)
+                            if item_key not in (
+                                st.session_state.admin_overrides
+                            ):
 
-                                if not 0 <= new_demand <= 10:
+                                st.session_state.admin_overrides[
+                                    item_key
+                                ] = {}
 
-                                    st.error(
-                                        "❌ Demand must be between 0 and 10."
+                            # =====================================
+                            # DEMAND
+                            # =====================================
+
+                            if property_name == "demand":
+
+                                try:
+
+                                    new_demand = float(
+                                        value_text
                                     )
 
-                                else:
-
-                                    old_demand = item.get("demand")
-
-                                    item["demand"] = new_demand
-
-                                    try:
-                                        save_item_permanently(item)
-
-                                    except Exception as e:
-
-                                        item["demand"] = old_demand
+                                    if not (
+                                        0 <= new_demand <= 10
+                                    ):
 
                                         st.error(
-                                            f"❌ Database save failed: {e}"
+                                            "❌ Demand must be "
+                                            "between 0 and 10."
                                         )
 
                                     else:
 
+                                        old_demand = item.get(
+                                            "demand"
+                                        )
+
+                                        item["demand"] = new_demand
+
+                                        st.session_state.admin_overrides[
+                                            item_key
+                                        ]["demand"] = new_demand
+
+                                        try:
+                                            save_item_permanently(item)
+                                        except Exception:
+                                            pass
+
                                         st.success(
-                                            f"✅ {item['name']} demand "
-                                            f"permanently changed!"
-                                        )
-
-                                        st.write(
-                                            f"Old Demand: "
-                                            f"**{safe_format_demand(old_demand)}**"
-                                        )
-
-                                        st.write(
-                                            f"New Demand: "
-                                            f"**{safe_format_demand(new_demand)}**"
-                                        )
-
-                                        st.info(
-                                            "💾 Saved to Supabase permanently."
+                                            f"✅ {item['name']} "
+                                            f"demand updated!"
                                         )
 
                                         st.rerun()
 
-                            except ValueError:
-
-                                st.error(
-                                    "❌ Demand must be a number from 0 to 10."
-                                )
-
-                    # -------------------------------------
-                    # VALUE
-                    # -------------------------------------
-
-                    else:
-
-                        item_name = " ".join(
-                            parts[1:-1]
-                        ).strip()
-
-                        value_text = (
-                            parts[-1]
-                            .upper()
-                            .replace(",", "")
-                            .strip()
-                        )
-
-                        item = next(
-                            (
-                                x for x in all_items
-                                if x["name"].lower()
-                                == item_name.lower()
-                            ),
-                            None
-                        )
-
-                        if item is None:
-
-                            st.error(
-                                f"❌ Item not found: {item_name}"
-                            )
-
-                        else:
-
-                            try:
-
-                                if value_text.endswith("B"):
-
-                                    multiplier = 1_000_000_000
-                                    number = value_text[:-1]
-
-                                elif value_text.endswith("M"):
-
-                                    multiplier = 1_000_000
-                                    number = value_text[:-1]
-
-                                elif value_text.endswith("K"):
-
-                                    multiplier = 1_000
-                                    number = value_text[:-1]
-
-                                else:
-
-                                    multiplier = 1
-                                    number = value_text
-
-                                new_value = int(
-                                    float(number) * multiplier
-                                )
-
-                                if new_value < 0:
+                                except ValueError:
 
                                     st.error(
-                                        "❌ Value cannot be negative."
+                                        "❌ Demand must be "
+                                        "a number from 0 to 10."
                                     )
 
-                                else:
+                            # =====================================
+                            # WORTH IT
+                            # =====================================
 
-                                    old_value = item.get("value")
+                            elif property_name == "worthit":
 
-                                    item["value"] = new_value
+                                try:
 
-                                    try:
-                                        save_item_permanently(item)
+                                    new_worthit = float(
+                                        value_text
+                                    )
 
-                                    except Exception as e:
-
-                                        item["value"] = old_value
+                                    if not (
+                                        0 <= new_worthit <= 10
+                                    ):
 
                                         st.error(
-                                            f"❌ Database save failed: {e}"
+                                            "❌ Worth It must be "
+                                            "between 0 and 10."
                                         )
 
                                     else:
 
+                                        item["worthit"] = new_worthit
+
+                                        st.session_state.admin_overrides[
+                                            item_key
+                                        ]["worthit"] = new_worthit
+
                                         st.success(
-                                            f"✅ {item['name']} value "
-                                            f"permanently changed!"
+                                            f"✅ {item['name']} "
+                                            f"Worth It updated!"
+                                        )
+
+                                        st.rerun()
+
+                                except ValueError:
+
+                                    st.error(
+                                        "❌ Worth It must be "
+                                        "a number from 0 to 10."
+                                    )
+
+                            # =====================================
+                            # ROBUX
+                            # =====================================
+
+                            elif property_name == "robux":
+
+                                try:
+
+                                    new_robux = int(
+                                        float(value_text)
+                                    )
+
+                                    if new_robux < 0:
+
+                                        st.error(
+                                            "❌ Robux price "
+                                            "cannot be negative."
+                                        )
+
+                                    else:
+
+                                        item["robux"] = new_robux
+
+                                        st.session_state.admin_overrides[
+                                            item_key
+                                        ]["robux"] = new_robux
+
+                                        st.success(
+                                            f"✅ {item['name']} "
+                                            f"Robux price updated!"
+                                        )
+
+                                        st.rerun()
+
+                                except ValueError:
+
+                                    st.error(
+                                        "❌ Robux price must "
+                                        "be a number."
+                                    )
+
+                            # =====================================
+                            # VALUE
+                            # =====================================
+
+                            else:
+
+                                try:
+
+                                    value_text = (
+                                        value_text
+                                        .upper()
+                                        .replace(",", "")
+                                        .strip()
+                                    )
+
+                                    multiplier = 1
+
+                                    if value_text.endswith("B"):
+
+                                        multiplier = 1_000_000_000
+                                        number = value_text[:-1]
+
+                                    elif value_text.endswith("M"):
+
+                                        multiplier = 1_000_000
+                                        number = value_text[:-1]
+
+                                    elif value_text.endswith("K"):
+
+                                        multiplier = 1_000
+                                        number = value_text[:-1]
+
+                                    else:
+
+                                        number = value_text
+
+                                    new_value = int(
+                                        float(number)
+                                        * multiplier
+                                    )
+
+                                    if new_value < 0:
+
+                                        st.error(
+                                            "❌ Value cannot "
+                                            "be negative."
+                                        )
+
+                                    else:
+
+                                        old_value = item.get(
+                                            "value"
+                                        )
+
+                                        item["value"] = new_value
+
+                                        st.session_state.admin_overrides[
+                                            item_key
+                                        ]["value"] = new_value
+
+                                        try:
+                                            save_item_permanently(item)
+                                        except Exception:
+                                            pass
+
+                                        st.success(
+                                            f"✅ {item['name']} "
+                                            f"value updated!"
                                         )
 
                                         st.write(
@@ -2009,23 +2224,22 @@ elif page == "🔐 Admin Panel":
                                             f"**{safe_format_value(new_value)}**"
                                         )
 
-                                        st.info(
-                                            "💾 Saved to Supabase permanently."
-                                        )
-
                                         st.rerun()
 
-                            except ValueError:
+                                except ValueError:
 
-                                st.error("❌ Invalid value.")
+                                    st.error(
+                                        "❌ Invalid value."
+                                    )
 
-                                st.info(
-                                    "Examples: 700M, 2.5B, 500K, 1000000"
-                                )
+                                    st.info(
+                                        "Examples: "
+                                        "`700M`, `2.5B`, `500K`"
+                                    )
 
-                # =========================================
+                # =================================================
                 # /RESET
-                # =========================================
+                # =================================================
 
                 elif command_name == "/reset":
 
@@ -2040,23 +2254,37 @@ elif page == "🔐 Admin Panel":
                         and parts[1].lower() == "all"
                     ):
 
-                        try:
+                        st.session_state.admin_overrides = {}
 
-                            for item in all_items:
-                                reset_item_permanently(item)
+                        for item in all_items:
 
-                            st.success(
-                                "🔄 ALL values and demands have been "
-                                "permanently reset."
+                            original = (
+                                st.session_state
+                                .original_values
+                                .get(item["name"].lower())
                             )
 
-                            st.rerun()
+                            if original:
 
-                        except Exception as e:
+                                if "value" in original:
+                                    item["value"] = original["value"]
 
-                            st.error(
-                                f"❌ Reset failed: {e}"
-                            )
+                                if "demand" in original:
+                                    item["demand"] = original["demand"]
+
+                                if "worthit" in original:
+                                    if original["worthit"] is not None:
+                                        item["worthit"] = original["worthit"]
+
+                                if "robux" in original:
+                                    if original["robux"] is not None:
+                                        item["robux"] = original["robux"]
+
+                        st.success(
+                            "🔄 All items restored."
+                        )
+
+                        st.rerun()
 
                     else:
 
@@ -2064,14 +2292,17 @@ elif page == "🔐 Admin Panel":
                             parts[1:]
                         ).strip()
 
-                        item = next(
-                            (
-                                x for x in all_items
-                                if x["name"].lower()
+                        item = None
+
+                        for x in all_items:
+
+                            if (
+                                x.get("name", "").lower()
                                 == item_name.lower()
-                            ),
-                            None
-                        )
+                            ):
+
+                                item = x
+                                break
 
                         if item is None:
 
@@ -2081,22 +2312,52 @@ elif page == "🔐 Admin Panel":
 
                         else:
 
-                            try:
+                            item_key = item["name"].lower()
 
-                                reset_item_permanently(item)
+                            original = (
+                                st.session_state
+                                .original_values
+                                .get(item_key)
+                            )
+
+                            if original is None:
+
+                                st.error(
+                                    "❌ No original backup exists."
+                                )
+
+                            else:
+
+                                item["value"] = original.get(
+                                    "value"
+                                )
+
+                                item["demand"] = original.get(
+                                    "demand"
+                                )
+
+                                if original.get("worthit") is not None:
+
+                                    item["worthit"] = original.get(
+                                        "worthit"
+                                    )
+
+                                if original.get("robux") is not None:
+
+                                    item["robux"] = original.get(
+                                        "robux"
+                                    )
+
+                                st.session_state.admin_overrides.pop(
+                                    item_key,
+                                    None
+                                )
 
                                 st.success(
-                                    f"🔄 {item['name']} has been "
-                                    "permanently reset!"
+                                    f"🔄 {item['name']} has been reset!"
                                 )
 
                                 st.rerun()
-
-                            except Exception as e:
-
-                                st.error(
-                                    f"❌ Reset failed: {e}"
-                                )
 
                 else:
 
@@ -2108,60 +2369,101 @@ elif page == "🔐 Admin Panel":
                         "Available commands: `/set` and `/reset`"
                     )
 
-        # =================================================
-        # DATABASE STATUS
-        # =================================================
+        # =====================================================
+        # STATUS
+        # =====================================================
 
         st.divider()
 
-        st.subheader("💾 Permanent Database Status")
+        st.subheader("📊 Admin Status")
 
-        try:
+        c1, c2, c3 = st.columns(3)
 
-            db_rows = (
-                supabase
-                .table("trading_items")
-                .select("name,value,demand,updated_at")
-                .execute()
-                .data
-                or []
+        with c1:
+
+            st.metric(
+                "Items",
+                len(all_items)
             )
 
-            c1, c2, c3 = st.columns(3)
+        with c2:
 
-            with c1:
-                st.metric(
-                    "Database Items",
-                    len(db_rows)
-                )
+            valued = [
+                x for x in all_items
+                if x.get("value") is not None
+            ]
 
-            with c2:
-                st.metric(
-                    "Items With Values",
-                    sum(
-                        1 for x in db_rows
-                        if x.get("value") is not None
+            st.metric(
+                "With Values",
+                len(valued)
+            )
+
+        with c3:
+
+            demanded = [
+                x for x in all_items
+                if x.get("demand") is not None
+            ]
+
+            st.metric(
+                "With Demand",
+                len(demanded)
+            )
+
+        # =====================================================
+        # ACTIVE CHANGES
+        # =====================================================
+
+        st.divider()
+
+        st.subheader("📝 Active Admin Changes")
+
+        if not st.session_state.admin_overrides:
+
+            st.info(
+                "No custom changes have been made."
+            )
+
+        else:
+
+            for item_name, changes in (
+                st.session_state.admin_overrides.items()
+            ):
+
+                display_parts = []
+
+                if "value" in changes:
+
+                    display_parts.append(
+                        f"Value: "
+                        f"**{safe_format_value(changes['value'])}**"
                     )
-                )
 
-            with c3:
-                st.metric(
-                    "Items With Demand",
-                    sum(
-                        1 for x in db_rows
-                        if x.get("demand") is not None
+                if "demand" in changes:
+
+                    display_parts.append(
+                        f"Demand: "
+                        f"**{safe_format_demand(changes['demand'])}**"
                     )
+
+                if "worthit" in changes:
+
+                    display_parts.append(
+                        f"Worth It: "
+                        f"**{changes['worthit']}/10**"
+                    )
+
+                if "robux" in changes:
+
+                    display_parts.append(
+                        f"Robux: "
+                        f"**{changes['robux']:,} R$**"
+                    )
+
+                st.write(
+                    f"**{item_name.title()}** — "
+                    + " • ".join(display_parts)
                 )
-
-            st.success(
-                "✅ Values and demand are stored permanently in Supabase."
-            )
-
-        except Exception as e:
-
-            st.error(
-                f"❌ Could not read database: {e}"
-            )
 
 
 # =========================================================
