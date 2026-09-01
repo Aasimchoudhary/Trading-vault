@@ -257,12 +257,21 @@ GAMEPASSES = [
         "worthit": 10.0
     },
 
-    {
-        "name": "2x Mastery + 2x Money",
+    { 
+        "name": "2x money",
         "value": 510_000_000,
         "robux": 450,
         "demand": 9.1,
-        "worthit": 9.2
+        "worthit": 10
+    },
+
+
+    {
+        "name": "2x Mastery",
+        "value": 510_000_000,
+        "robux": 450,
+        "demand": 9.1,
+        "worthit": 10
     },
 
     {
