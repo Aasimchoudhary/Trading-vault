@@ -40,7 +40,7 @@ def format_demand(value):
 
 
 # =========================================================
-# 🍎 REGULAR FRUITS
+# REGULAR FRUITS
 # =========================================================
 
 FRUITS = [
@@ -174,7 +174,7 @@ FRUITS = [
 
 
 # =========================================================
-# ♾️ PERMANENTS
+# PERMANENTS
 # =========================================================
 
 PERMANENTS = [
@@ -203,7 +203,7 @@ PERMANENTS = [
 
 
 # =========================================================
-# 🏷️ LIMITEDS
+# LIMITEDS
 # =========================================================
 
 LIMITEDS = [
@@ -244,7 +244,7 @@ LIMITEDS = [
 
 
 # =========================================================
-# 🎟️ GAMEPASSES
+# GAMEPASSES
 # =========================================================
 
 GAMEPASSES = [
@@ -257,14 +257,13 @@ GAMEPASSES = [
         "worthit": 10.0
     },
 
-    { 
+    {
         "name": "2x money",
         "value": 510_000_000,
         "robux": 450,
         "demand": 9.1,
         "worthit": 10
     },
-
 
     {
         "name": "2x Mastery",
@@ -391,14 +390,19 @@ def get_supabase_client():
             "Add SUPABASE_URL and SUPABASE_KEY to Streamlit Secrets."
         )
 
+        st.code(str(e))
         st.stop()
 
 
 supabase = get_supabase_client()
 
 
+# =========================================================
+# DATABASE HELPERS
+# =========================================================
+
 def all_vault_items():
-    return FRUITS + PERMANENTS + LIMITEDS
+    return FRUITS + PERMANENTS + LIMITEDS + GAMEPASSES
 
 
 def db_category(item):
@@ -409,7 +413,13 @@ def db_category(item):
     if item in PERMANENTS:
         return "permanent"
 
-    return "limited"
+    if item in LIMITEDS:
+        return "limited"
+
+    if item in GAMEPASSES:
+        return "gamepass"
+
+    return "unknown"
 
 
 def seed_database_if_empty():
@@ -419,35 +429,44 @@ def seed_database_if_empty():
         result = (
             supabase
             .table("trading_items")
-            .select("id")
-            .limit(1)
+            .select("name")
             .execute()
         )
 
-        if result.data:
-            return
+        existing_names = {
+            str(row["name"]).strip().lower()
+            for row in (result.data or [])
+        }
 
         rows = []
 
         for item in all_vault_items():
 
-            rows.append({
-                "name": item["name"],
-                "category": db_category(item),
-                "value": item.get("value"),
-                "demand": item.get("demand")
-            })
+            item_name = item["name"].strip().lower()
+
+            if item_name not in existing_names:
+
+                rows.append({
+                    "name": item["name"],
+                    "category": db_category(item),
+                    "value": item.get("value"),
+                    "demand": item.get("demand")
+                })
 
         if rows:
-            supabase.table("trading_items").insert(rows).execute()
+
+            supabase \
+                .table("trading_items") \
+                .insert(rows) \
+                .execute()
 
     except Exception as e:
 
         st.error(
-            "❌ Could not initialize Trading Vault database.\n\n"
-            f"{e}"
+            "❌ Could not initialize Trading Vault database."
         )
 
+        st.code(str(e))
         st.stop()
 
 
@@ -477,20 +496,26 @@ def load_database_values():
 
             if row:
 
-                item["value"] = row.get("value")
+                if row.get("value") is not None:
+                    item["value"] = row.get("value")
+
                 item["demand"] = row.get("demand")
 
     except Exception as e:
 
         st.error(
-            "❌ Could not load Trading Vault database.\n\n"
-            f"{e}"
+            "❌ Could not load Trading Vault database."
         )
 
+        st.code(str(e))
         st.stop()
 
 
 def save_item_permanently(item):
+
+    """
+    Permanently save value and demand to Supabase.
+    """
 
     result = (
         supabase
@@ -506,8 +531,47 @@ def save_item_permanently(item):
     if not result.data:
 
         raise RuntimeError(
-            f"No database row was updated for {item['name']}."
+            f"No Supabase row was updated for '{item['name']}'. "
+            f"Check that the item exists and your Supabase permissions allow UPDATE."
         )
+
+    return True
+
+
+def save_full_item_permanently(item):
+
+    """
+    Save all supported database fields.
+    """
+
+    data = {
+        "value": item.get("value"),
+        "demand": item.get("demand")
+    }
+
+    result = (
+        supabase
+        .table("trading_items")
+        .update(data)
+        .eq("name", item["name"])
+        .execute()
+    )
+
+    if not result.data:
+
+        raise RuntimeError(
+            f"No Supabase row was updated for '{item['name']}'."
+        )
+
+    return True
+
+
+def restore_original_permanently(item, original):
+
+    item["value"] = original.get("value")
+    item["demand"] = original.get("demand")
+
+    save_item_permanently(item)
 
 
 # =========================================================
@@ -576,7 +640,7 @@ def sort_items(items, sort_by):
 
 
 # =========================================================
-# 🍎 FRUITS
+# FRUITS
 # =========================================================
 
 if page == "🍎 Fruits":
@@ -630,7 +694,7 @@ if page == "🍎 Fruits":
 
 
 # =========================================================
-# ♾️ PERMANENTS
+# PERMANENTS
 # =========================================================
 
 elif page == "♾️ Permanents":
@@ -695,7 +759,7 @@ elif page == "♾️ Permanents":
 
 
 # =========================================================
-# 🎟️ GAMEPASSES
+# GAMEPASSES
 # =========================================================
 
 elif page == "🎟️ Gamepasses":
@@ -767,7 +831,7 @@ elif page == "🎟️ Gamepasses":
 
 
 # =========================================================
-# 🏷️ LIMITEDS
+# LIMITEDS
 # =========================================================
 
 elif page == "🏷️ Limiteds":
@@ -828,7 +892,7 @@ elif page == "🏷️ Limiteds":
 
 
 # =========================================================
-# 🤝 TRADE CALCULATOR
+# TRADE CALCULATOR
 # =========================================================
 
 elif page == "🤝 Trade Calculator":
@@ -839,19 +903,11 @@ elif page == "🤝 Trade Calculator":
         "Compare the total value of both sides of a trade."
     )
 
-    # -----------------------------------------------------
-    # SESSION STATE
-    # -----------------------------------------------------
-
     if "your_trade" not in st.session_state:
         st.session_state.your_trade = []
 
     if "their_trade" not in st.session_state:
         st.session_state.their_trade = []
-
-    # -----------------------------------------------------
-    # TRADE ITEMS
-    # -----------------------------------------------------
 
     trade_items = get_all_items()
 
@@ -861,10 +917,6 @@ elif page == "🤝 Trade Calculator":
         f'{format_value(item.get("value"))}'
         for item in trade_items
     ]
-
-    # -----------------------------------------------------
-    # SELECT ITEMS
-    # -----------------------------------------------------
 
     left, right = st.columns(2)
 
@@ -918,10 +970,6 @@ elif page == "🤝 Trade Calculator":
 
             st.rerun()
 
-    # -----------------------------------------------------
-    # TOTAL FUNCTION
-    # -----------------------------------------------------
-
     def trade_total(items):
 
         return sum(
@@ -938,10 +986,6 @@ elif page == "🤝 Trade Calculator":
     )
 
     st.divider()
-
-    # -----------------------------------------------------
-    # YOUR ITEMS
-    # -----------------------------------------------------
 
     left, right = st.columns(2)
 
@@ -987,10 +1031,6 @@ elif page == "🤝 Trade Calculator":
             format_value(your_total)
         )
 
-    # -----------------------------------------------------
-    # THEIR ITEMS
-    # -----------------------------------------------------
-
     with right:
 
         st.subheader("🟥 Their Items")
@@ -1033,10 +1073,6 @@ elif page == "🤝 Trade Calculator":
             format_value(their_total)
         )
 
-    # -----------------------------------------------------
-    # CLEAR BUTTONS
-    # -----------------------------------------------------
-
     st.divider()
 
     c1, c2 = st.columns(2)
@@ -1060,10 +1096,6 @@ elif page == "🤝 Trade Calculator":
 
             st.session_state.their_trade = []
             st.rerun()
-
-    # -----------------------------------------------------
-    # RESULT
-    # -----------------------------------------------------
 
     if your_total > 0 and their_total > 0:
 
@@ -1150,7 +1182,7 @@ elif page == "🤝 Trade Calculator":
 
 
 # =========================================================
-# 📈 MARKET
+# MARKET
 # =========================================================
 
 elif page == "📈 Market":
@@ -1229,10 +1261,6 @@ elif page == "📈 Market":
                 highest_demand["name"]
             )
 
-    # -----------------------------------------------------
-    # TOP VALUE
-    # -----------------------------------------------------
-
     st.divider()
 
     st.subheader("💎 Highest Value Items")
@@ -1269,10 +1297,6 @@ elif page == "📈 Market":
                 f'💰 **{format_value(item["value"])}**'
             )
 
-    # -----------------------------------------------------
-    # DEMAND
-    # -----------------------------------------------------
-
     st.divider()
 
     st.subheader("🔥 Highest Demand")
@@ -1308,10 +1332,6 @@ elif page == "📈 Market":
             st.write(
                 f'🔥 **{format_demand(item["demand"])}**'
             )
-
-    # -----------------------------------------------------
-    # SIGNALS
-    # -----------------------------------------------------
 
     st.divider()
 
@@ -1381,10 +1401,6 @@ elif page == "📈 Market":
                 f'Value {format_value(item["value"])}'
             )
 
-    # -----------------------------------------------------
-    # HIGH VALUE LOW DEMAND
-    # -----------------------------------------------------
-
     st.divider()
 
     st.subheader("⚠️ High Value / Low Demand")
@@ -1416,10 +1432,6 @@ elif page == "📈 Market":
             "No high-value / low-demand items detected."
         )
 
-    # -----------------------------------------------------
-    # HIGH DEMAND LOWER VALUE
-    # -----------------------------------------------------
-
     st.divider()
 
     st.subheader("💎 High Demand / Lower Value")
@@ -1444,7 +1456,7 @@ elif page == "📈 Market":
 
 
 # =========================================================
-# 🤖 AI ASSISTANT
+# AI ASSISTANT
 # =========================================================
 
 elif page == "🤖 AI Assistant":
@@ -1527,10 +1539,6 @@ Demand: {safe_format_demand(item.get("demand"))}
 
         database_text += "\n"
 
-    # -----------------------------------------------------
-    # API KEY
-    # -----------------------------------------------------
-
     api_key = None
 
     try:
@@ -1540,9 +1548,11 @@ Demand: {safe_format_demand(item.get("demand"))}
     except Exception:
 
         try:
+
             api_key = st.secrets["gemini"]["api_key"]
 
         except Exception:
+
             api_key = None
 
     if not api_key:
@@ -1562,10 +1572,6 @@ Demand: {safe_format_demand(item.get("demand"))}
 
         st.stop()
 
-    # -----------------------------------------------------
-    # CLIENT
-    # -----------------------------------------------------
-
     try:
 
         client = genai.Client(
@@ -1579,10 +1585,6 @@ Demand: {safe_format_demand(item.get("demand"))}
         )
 
         st.stop()
-
-    # -----------------------------------------------------
-    # CHAT HISTORY
-    # -----------------------------------------------------
 
     if "ai_messages" not in st.session_state:
 
@@ -1745,7 +1747,7 @@ CURRENT CONVERSATION:
 
 
 # =========================================================
-# 🔐 ADMIN PANEL
+# ADMIN PANEL
 # =========================================================
 
 elif page == "🔐 Admin Panel":
@@ -1758,13 +1760,6 @@ elif page == "🔐 Admin Panel":
 
     if "admin_logged_in" not in st.session_state:
         st.session_state.admin_logged_in = False
-
-    if "admin_overrides" not in st.session_state:
-        st.session_state.admin_overrides = {}
-
-    # =====================================================
-    # LOGIN
-    # =====================================================
 
     if not st.session_state.admin_logged_in:
 
@@ -1816,10 +1811,6 @@ elif page == "🔐 Admin Panel":
                     "in Streamlit Secrets."
                 )
 
-    # =====================================================
-    # DASHBOARD
-    # =====================================================
-
     else:
 
         st.success(
@@ -1845,41 +1836,11 @@ elif page == "🔐 Admin Panel":
             + GAMEPASSES
         )
 
-        # =================================================
-        # APPLY OVERRIDES
-        # =================================================
-
-        for item in all_items:
-
-            item_key = item["name"].lower()
-
-            if item_key in st.session_state.admin_overrides:
-
-                override = (
-                    st.session_state
-                    .admin_overrides[item_key]
-                )
-
-                for field in [
-                    "value",
-                    "demand",
-                    "worthit",
-                    "robux"
-                ]:
-
-                    if field in override:
-
-                        item[field] = override[field]
-
-        # =================================================
-        # COMMAND CENTER
-        # =================================================
-
         st.subheader("💻 Command Center")
 
         st.markdown(
             """
-**Available commands**
+### Available commands
 
 `/set ITEM VALUE`
 
@@ -1893,7 +1854,7 @@ elif page == "🔐 Admin Panel":
 
 `/reset all`
 
-**Examples**
+### Examples
 
 `/set Kitsune 700M`
 
@@ -1940,7 +1901,7 @@ elif page == "🔐 Admin Panel":
                 command_name = parts[0].lower()
 
                 # =================================================
-                # /SET
+                # SET COMMAND
                 # =================================================
 
                 if command_name == "/set":
@@ -2005,21 +1966,7 @@ elif page == "🔐 Admin Panel":
 
                         else:
 
-                            item_key = (
-                                item["name"].lower()
-                            )
-
-                            if item_key not in (
-                                st.session_state.admin_overrides
-                            ):
-
-                                st.session_state.admin_overrides[
-                                    item_key
-                                ] = {}
-
-                            # =====================================
-                            # DEMAND
-                            # =====================================
+                            item_key = item["name"].lower()
 
                             if property_name == "demand":
 
@@ -2034,8 +1981,7 @@ elif page == "🔐 Admin Panel":
                                     ):
 
                                         st.error(
-                                            "❌ Demand must be "
-                                            "between 0 and 10."
+                                            "❌ Demand must be between 0 and 10."
                                         )
 
                                     else:
@@ -2046,18 +1992,13 @@ elif page == "🔐 Admin Panel":
 
                                         item["demand"] = new_demand
 
-                                        st.session_state.admin_overrides[
-                                            item_key
-                                        ]["demand"] = new_demand
-
-                                        try:
-                                            save_item_permanently(item)
-                                        except Exception:
-                                            pass
+                                        # SAVE TO SUPABASE
+                                        save_item_permanently(item)
 
                                         st.success(
-                                            f"✅ {item['name']} "
-                                            f"demand updated!"
+                                            f"✅ {item['name']} demand permanently "
+                                            f"changed from {format_demand(old_demand)} "
+                                            f"to {format_demand(new_demand)}."
                                         )
 
                                         st.rerun()
@@ -2065,13 +2006,16 @@ elif page == "🔐 Admin Panel":
                                 except ValueError:
 
                                     st.error(
-                                        "❌ Demand must be "
-                                        "a number from 0 to 10."
+                                        "❌ Demand must be a number from 0 to 10."
                                     )
 
-                            # =====================================
-                            # WORTH IT
-                            # =====================================
+                                except Exception as e:
+
+                                    st.error(
+                                        "❌ Demand was NOT saved to Supabase."
+                                    )
+
+                                    st.code(str(e))
 
                             elif property_name == "worthit":
 
@@ -2086,21 +2030,29 @@ elif page == "🔐 Admin Panel":
                                     ):
 
                                         st.error(
-                                            "❌ Worth It must be "
-                                            "between 0 and 10."
+                                            "❌ Worth It must be between 0 and 10."
                                         )
 
                                     else:
 
+                                        # NOTE:
+                                        # Current trading_items table does not
+                                        # contain a worthit column.
+                                        #
+                                        # We update the local app value here.
+                                        # To make worthit permanent, add a
+                                        # worthit column to Supabase.
+
                                         item["worthit"] = new_worthit
 
-                                        st.session_state.admin_overrides[
-                                            item_key
-                                        ]["worthit"] = new_worthit
-
                                         st.success(
-                                            f"✅ {item['name']} "
-                                            f"Worth It updated!"
+                                            f"✅ {item['name']} Worth It updated "
+                                            f"for this app session."
+                                        )
+
+                                        st.info(
+                                            "ℹ️ Worth It is not stored in the "
+                                            "current trading_items table."
                                         )
 
                                         st.rerun()
@@ -2108,13 +2060,8 @@ elif page == "🔐 Admin Panel":
                                 except ValueError:
 
                                     st.error(
-                                        "❌ Worth It must be "
-                                        "a number from 0 to 10."
+                                        "❌ Worth It must be a number from 0 to 10."
                                     )
-
-                            # =====================================
-                            # ROBUX
-                            # =====================================
 
                             elif property_name == "robux":
 
@@ -2127,21 +2074,25 @@ elif page == "🔐 Admin Panel":
                                     if new_robux < 0:
 
                                         st.error(
-                                            "❌ Robux price "
-                                            "cannot be negative."
+                                            "❌ Robux price cannot be negative."
                                         )
 
                                     else:
 
+                                        # NOTE:
+                                        # Current trading_items table does not
+                                        # contain a robux column.
+
                                         item["robux"] = new_robux
 
-                                        st.session_state.admin_overrides[
-                                            item_key
-                                        ]["robux"] = new_robux
-
                                         st.success(
-                                            f"✅ {item['name']} "
-                                            f"Robux price updated!"
+                                            f"✅ {item['name']} Robux updated "
+                                            f"for this app session."
+                                        )
+
+                                        st.info(
+                                            "ℹ️ Robux is not stored in the "
+                                            "current trading_items table."
                                         )
 
                                         st.rerun()
@@ -2149,13 +2100,8 @@ elif page == "🔐 Admin Panel":
                                 except ValueError:
 
                                     st.error(
-                                        "❌ Robux price must "
-                                        "be a number."
+                                        "❌ Robux price must be a number."
                                     )
-
-                            # =====================================
-                            # VALUE
-                            # =====================================
 
                             else:
 
@@ -2197,8 +2143,7 @@ elif page == "🔐 Admin Panel":
                                     if new_value < 0:
 
                                         st.error(
-                                            "❌ Value cannot "
-                                            "be negative."
+                                            "❌ Value cannot be negative."
                                         )
 
                                     else:
@@ -2209,18 +2154,15 @@ elif page == "🔐 Admin Panel":
 
                                         item["value"] = new_value
 
-                                        st.session_state.admin_overrides[
-                                            item_key
-                                        ]["value"] = new_value
+                                        # =====================================
+                                        # PERMANENT SUPABASE SAVE
+                                        # =====================================
 
-                                        try:
-                                            save_item_permanently(item)
-                                        except Exception:
-                                            pass
+                                        save_item_permanently(item)
 
                                         st.success(
-                                            f"✅ {item['name']} "
-                                            f"value updated!"
+                                            f"✅ {item['name']} value PERMANENTLY "
+                                            f"saved to Supabase!"
                                         )
 
                                         st.write(
@@ -2242,12 +2184,19 @@ elif page == "🔐 Admin Panel":
                                     )
 
                                     st.info(
-                                        "Examples: "
-                                        "`700M`, `2.5B`, `500K`"
+                                        "Examples: `700M`, `2.5B`, `500K`"
                                     )
 
+                                except Exception as e:
+
+                                    st.error(
+                                        "❌ VALUE WAS NOT SAVED TO SUPABASE."
+                                    )
+
+                                    st.code(str(e))
+
                 # =================================================
-                # /RESET
+                # RESET COMMAND
                 # =================================================
 
                 elif command_name == "/reset":
@@ -2263,35 +2212,46 @@ elif page == "🔐 Admin Panel":
                         and parts[1].lower() == "all"
                     ):
 
-                        st.session_state.admin_overrides = {}
+                        reset_errors = []
 
                         for item in all_items:
 
                             original = (
-                                st.session_state
-                                .original_values
+                                st.session_state.original_values
                                 .get(item["name"].lower())
                             )
 
                             if original:
 
-                                if "value" in original:
-                                    item["value"] = original["value"]
+                                item["value"] = original.get("value")
+                                item["demand"] = original.get("demand")
 
-                                if "demand" in original:
-                                    item["demand"] = original["demand"]
+                                try:
 
-                                if "worthit" in original:
-                                    if original["worthit"] is not None:
-                                        item["worthit"] = original["worthit"]
+                                    save_item_permanently(item)
 
-                                if "robux" in original:
-                                    if original["robux"] is not None:
-                                        item["robux"] = original["robux"]
+                                except Exception as e:
 
-                        st.success(
-                            "🔄 All items restored."
-                        )
+                                    reset_errors.append(
+                                        f"{item['name']}: {e}"
+                                    )
+
+                        if reset_errors:
+
+                            st.error(
+                                "❌ Some items could not be reset."
+                            )
+
+                            st.code(
+                                "\n".join(reset_errors)
+                            )
+
+                        else:
+
+                            st.success(
+                                "✅ ALL values and demand have been "
+                                "PERMANENTLY reset in Supabase."
+                            )
 
                         st.rerun()
 
@@ -2324,8 +2284,7 @@ elif page == "🔐 Admin Panel":
                             item_key = item["name"].lower()
 
                             original = (
-                                st.session_state
-                                .original_values
+                                st.session_state.original_values
                                 .get(item_key)
                             )
 
@@ -2337,36 +2296,54 @@ elif page == "🔐 Admin Panel":
 
                             else:
 
-                                item["value"] = original.get(
-                                    "value"
-                                )
+                                try:
 
-                                item["demand"] = original.get(
-                                    "demand"
-                                )
+                                    old_value = item.get("value")
+                                    old_demand = item.get("demand")
 
-                                if original.get("worthit") is not None:
-
-                                    item["worthit"] = original.get(
-                                        "worthit"
+                                    item["value"] = original.get(
+                                        "value"
                                     )
 
-                                if original.get("robux") is not None:
-
-                                    item["robux"] = original.get(
-                                        "robux"
+                                    item["demand"] = original.get(
+                                        "demand"
                                     )
 
-                                st.session_state.admin_overrides.pop(
-                                    item_key,
-                                    None
-                                )
+                                    # =====================================
+                                    # PERMANENT RESET
+                                    # =====================================
 
-                                st.success(
-                                    f"🔄 {item['name']} has been reset!"
-                                )
+                                    save_item_permanently(item)
 
-                                st.rerun()
+                                    st.success(
+                                        f"✅ {item['name']} has been "
+                                        f"PERMANENTLY reset in Supabase!"
+                                    )
+
+                                    st.write(
+                                        f"Value: "
+                                        f"**{safe_format_value(old_value)}** "
+                                        f"→ "
+                                        f"**{safe_format_value(item['value'])}**"
+                                    )
+
+                                    st.write(
+                                        f"Demand: "
+                                        f"**{safe_format_demand(old_demand)}** "
+                                        f"→ "
+                                        f"**{safe_format_demand(item['demand'])}**"
+                                    )
+
+                                    st.rerun()
+
+                                except Exception as e:
+
+                                    st.error(
+                                        f"❌ {item['name']} was NOT reset "
+                                        f"in Supabase."
+                                    )
+
+                                    st.code(str(e))
 
                 else:
 
@@ -2377,6 +2354,51 @@ elif page == "🔐 Admin Panel":
                     st.info(
                         "Available commands: `/set` and `/reset`"
                     )
+
+        # =====================================================
+        # DATABASE TEST
+        # =====================================================
+
+        st.divider()
+
+        st.subheader("🗄️ Database Status")
+
+        if st.button(
+            "🔄 Test Supabase Connection",
+            use_container_width=True
+        ):
+
+            try:
+
+                test = (
+                    supabase
+                    .table("trading_items")
+                    .select("name,value,demand")
+                    .limit(1)
+                    .execute()
+                )
+
+                if test.data:
+
+                    st.success(
+                        "🟢 Supabase connected successfully."
+                    )
+
+                    st.json(test.data[0])
+
+                else:
+
+                    st.warning(
+                        "⚠️ Supabase connected, but the table is empty."
+                    )
+
+            except Exception as e:
+
+                st.error(
+                    "🔴 Supabase connection/query failed."
+                )
+
+                st.code(str(e))
 
         # =====================================================
         # STATUS
@@ -2425,54 +2447,40 @@ elif page == "🔐 Admin Panel":
 
         st.divider()
 
-        st.subheader("📝 Active Admin Changes")
+        st.subheader("📝 Database Values")
 
-        if not st.session_state.admin_overrides:
+        try:
 
-            st.info(
-                "No custom changes have been made."
+            db_result = (
+                supabase
+                .table("trading_items")
+                .select("name,category,value,demand")
+                .order("name")
+                .execute()
             )
 
-        else:
+            db_rows = db_result.data or []
 
-            for item_name, changes in (
-                st.session_state.admin_overrides.items()
-            ):
+            st.caption(
+                f"{len(db_rows)} items currently stored in Supabase."
+            )
 
-                display_parts = []
-
-                if "value" in changes:
-
-                    display_parts.append(
-                        f"Value: "
-                        f"**{safe_format_value(changes['value'])}**"
-                    )
-
-                if "demand" in changes:
-
-                    display_parts.append(
-                        f"Demand: "
-                        f"**{safe_format_demand(changes['demand'])}**"
-                    )
-
-                if "worthit" in changes:
-
-                    display_parts.append(
-                        f"Worth It: "
-                        f"**{changes['worthit']}/10**"
-                    )
-
-                if "robux" in changes:
-
-                    display_parts.append(
-                        f"Robux: "
-                        f"**{changes['robux']:,} R$**"
-                    )
+            for row in db_rows:
 
                 st.write(
-                    f"**{item_name.title()}** — "
-                    + " • ".join(display_parts)
+                    f'**{row["name"]}** — '
+                    f'{row.get("category", "N/A")} • '
+                    f'💰 {safe_format_value(row.get("value"))} • '
+                    f'🔥 {safe_format_demand(row.get("demand"))}'
                 )
+
+        except Exception as e:
+
+            st.error(
+                "Could not read database values."
+            )
+
+            st.code(str(e))
 
 
 # =========================================================
