@@ -1,6 +1,8 @@
 import streamlit as st
 from google import genai
 from supabase import create_client
+import uuid
+import json
 
 # =========================================================
 # TRADING VAULT V3.4
@@ -11,6 +13,28 @@ st.set_page_config(
     page_icon="🏦",
     layout="wide"
 )
+
+# =========================================================
+# SUPABASE CONNECTION
+# =========================================================
+
+try:
+
+    SUPABASE_URL = st.secrets["SUPABASE_URL"]
+    SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+
+    supabase = create_client(
+        SUPABASE_URL,
+        SUPABASE_KEY
+    )
+
+except Exception as e:
+
+    supabase = None
+
+    st.warning(
+        f"⚠️ Supabase connection unavailable: {e}"
+    )
 
 # =========================================================
 # FORMAT FUNCTIONS
@@ -581,6 +605,90 @@ def restore_original_permanently(item, original):
 seed_database_if_empty()
 load_database_values()
 
+# =========================================================
+# 👤 ACCOUNT SYSTEM
+# =========================================================
+
+if "user" not in st.session_state:
+    st.session_state.user = None
+
+if "auth_session" not in st.session_state:
+    st.session_state.auth_session = None
+
+
+def current_user():
+    return st.session_state.get("user")
+
+
+def is_logged_in():
+    return current_user() is not None
+
+
+def get_user_id():
+
+    user = current_user()
+
+    if not user:
+        return None
+
+    if isinstance(user, dict):
+        return user.get("id")
+
+    return getattr(user, "id", None)
+
+
+def get_username():
+
+    user = current_user()
+
+    if not user:
+        return None
+
+    if isinstance(user, dict):
+
+        metadata = user.get("user_metadata") or {}
+
+        return (
+            metadata.get("username")
+            or metadata.get("name")
+            or user.get("email", "").split("@")[0]
+        )
+
+    metadata = getattr(user, "user_metadata", {}) or {}
+
+    return (
+        metadata.get("username")
+        or metadata.get("name")
+        or getattr(user, "email", "").split("@")[0]
+    )
+
+# =========================================================
+# 🔐 REQUIRE ACCOUNT
+# =========================================================
+
+def require_account():
+
+    if not st.session_state.get("user"):
+
+        st.warning("🔐 Account Required")
+
+        st.info(
+            "You need to create an account or log in "
+            "to use Trade Ads and Chat."
+        )
+
+        if st.button(
+            "👤 Go to Account",
+            use_container_width=True,
+            key="go_to_account"
+        ):
+            st.session_state["page"] = "👤 Account"
+            st.rerun()
+
+        return False
+
+    return True
+
 
 # =========================================================
 # SIDEBAR
@@ -595,6 +703,9 @@ page = st.sidebar.radio(
         "🏷️ Limiteds",
         "🤝 Trade Calculator",
         "📈 Market",
+        "👤 Account",
+        "📢 Trade Ads",
+        "💬 Messages",
         "🤖 AI Assistant",
         "🔐 Admin Panel"
     ]
@@ -1180,6 +1291,740 @@ elif page == "🤝 Trade Calculator":
             "Add at least one item to both sides."
         )
 
+# =========================================================
+# 👤 ACCOUNT
+# =========================================================
+
+elif page == "👤 Account":
+
+    st.header("👤 Trading Vault Account")
+
+    if is_logged_in():
+
+        st.success("🟢 You are logged in.")
+
+        st.write(
+            f"**Username:** {get_username()}"
+        )
+
+        user_id = get_user_id()
+
+        st.caption(
+            f"Account ID: {user_id}"
+        )
+
+        st.divider()
+
+        if st.button(
+            "🚪 Logout",
+            use_container_width=True
+        ):
+
+            try:
+
+                supabase.auth.sign_out()
+
+            except Exception:
+                pass
+
+            st.session_state.user = None
+            st.session_state.auth_session = None
+
+            st.success("Logged out successfully.")
+
+            st.rerun()
+
+    else:
+
+        tab1, tab2 = st.tabs(
+            [
+                "🔐 Login",
+                "📝 Create Account"
+            ]
+        )
+
+        # =================================================
+        # LOGIN
+        # =================================================
+
+        with tab1:
+
+            st.subheader("🔐 Login")
+
+            login_email = st.text_input(
+                "Email",
+                key="login_email"
+            )
+
+            login_password = st.text_input(
+                "Password",
+                type="password",
+                key="login_password"
+            )
+
+            if st.button(
+                "🔐 Login",
+                use_container_width=True,
+                key="login_button"
+            ):
+
+                if not login_email or not login_password:
+
+                    st.error(
+                        "Please enter your email and password."
+                    )
+
+                else:
+
+                    try:
+
+                        response = (
+                            supabase.auth
+                            .sign_in_with_password({
+                                "email": login_email,
+                                "password": login_password
+                            })
+                        )
+
+                        st.session_state.auth_session = (
+                            response.session
+                        )
+
+                        st.session_state.user = (
+                            response.user
+                        )
+
+                        st.success(
+                            "✅ Login successful!"
+                        )
+
+                        st.rerun()
+
+                    except Exception as e:
+
+                        st.error(
+                            f"❌ Login failed: {e}"
+                        )
+
+        # =================================================
+        # CREATE ACCOUNT
+        # =================================================
+
+        with tab2:
+
+            st.subheader("📝 Create Account")
+
+            signup_username = st.text_input(
+                "Username",
+                key="signup_username"
+            )
+
+            signup_email = st.text_input(
+                "Email",
+                key="signup_email"
+            )
+
+            signup_password = st.text_input(
+                "Password",
+                type="password",
+                key="signup_password"
+            )
+
+            signup_confirm = st.text_input(
+                "Confirm Password",
+                type="password",
+                key="signup_confirm"
+            )
+
+            if st.button(
+                "📝 Create Account",
+                use_container_width=True,
+                key="signup_button"
+            ):
+
+                if not signup_username:
+
+                    st.error(
+                        "Please enter a username."
+                    )
+
+                elif not signup_email:
+
+                    st.error(
+                        "Please enter an email."
+                    )
+
+                elif len(signup_password) < 6:
+
+                    st.error(
+                        "Password must be at least 6 characters."
+                    )
+
+                elif signup_password != signup_confirm:
+
+                    st.error(
+                        "Passwords do not match."
+                    )
+
+                else:
+
+                    try:
+
+                        response = (
+                            supabase.auth
+                            .sign_up({
+                                "email": signup_email,
+                                "password": signup_password,
+                                "options": {
+                                    "data": {
+                                        "username":
+                                            signup_username
+                                    }
+                                }
+                            })
+                        )
+
+                        if response.user:
+
+                            if response.session:
+
+                                st.session_state.user = (
+                                    response.user
+                                )
+
+                                st.session_state.auth_session = (
+                                    response.session
+                                )
+
+                                st.success(
+                                    "✅ Account created!"
+                                )
+
+                                st.rerun()
+
+                            else:
+
+                                st.success(
+                                    "✅ Account created!"
+                                )
+
+                                st.info(
+                                    "Check your email to confirm your account, "
+                                    "then log in."
+                                )
+
+                    except Exception as e:
+
+                        st.error(
+                            f"❌ Account creation failed: {e}"
+                        )
+
+
+# =========================================================
+# 📢 TRADE ADS
+# =========================================================
+
+elif page == "📢 Trade Ads":
+
+    st.header("📢 Trade Ads")
+
+    st.caption(
+        "Create and browse Blox Fruits trading advertisements."
+    )
+
+    if not require_account():
+
+        st.stop()
+
+    trade_items = get_all_items()
+
+    # =====================================================
+    # CREATE AD
+    # =====================================================
+
+    with st.expander(
+        "➕ Create Trade Ad",
+        expanded=False
+    ):
+
+        st.subheader("📢 New Trade Advertisement")
+
+        item_options = [
+            f'{item["name"]} • '
+            f'{item["category"]} • '
+            f'{format_value(item.get("value"))}'
+            for item in trade_items
+        ]
+
+        offering = st.multiselect(
+            "🟦 What are you offering?",
+            item_options,
+            key="ad_offering"
+        )
+
+        looking_for = st.multiselect(
+            "🟥 What are you looking for?",
+            item_options,
+            key="ad_looking_for"
+        )
+
+        ad_message = st.text_area(
+            "💬 Message",
+            placeholder="Example: Looking for a good overpay for Kitsune...",
+            max_chars=500,
+            key="ad_message"
+        )
+
+        if st.button(
+            "📢 Publish Trade Ad",
+            use_container_width=True
+        ):
+
+            if not offering:
+
+                st.error(
+                    "Select at least one item you are offering."
+                )
+
+            elif not looking_for:
+
+                st.error(
+                    "Select at least one item you want."
+                )
+
+            else:
+
+                offering_names = [
+                    x.split(" • ")[0]
+                    for x in offering
+                ]
+
+                looking_names = [
+                    x.split(" • ")[0]
+                    for x in looking_for
+                ]
+
+                try:
+
+                    supabase.table(
+                        "trade_ads"
+                    ).insert({
+                        "user_id": get_user_id(),
+                        "username": get_username(),
+                        "offering": offering_names,
+                        "looking_for": looking_names,
+                        "message": ad_message,
+                        "active": True
+                    }).execute()
+
+                    st.success(
+                        "✅ Trade ad published!"
+                    )
+
+                    st.rerun()
+
+                except Exception as e:
+
+                    st.error(
+                        f"❌ Could not publish ad: {e}"
+                    )
+
+    st.divider()
+
+    # =====================================================
+    # SEARCH
+    # =====================================================
+
+    ad_search = st.text_input(
+        "🔎 Search trade ads",
+        placeholder="Search username, item or message..."
+    )
+
+    # =====================================================
+    # LOAD ADS
+    # =====================================================
+
+    try:
+
+        response = (
+            supabase
+            .table("trade_ads")
+            .select("*")
+            .eq("active", True)
+            .order("created_at", desc=True)
+            .execute()
+        )
+
+        ads = response.data or []
+
+    except Exception as e:
+
+        st.error(
+            f"❌ Could not load trade ads: {e}"
+        )
+
+        ads = []
+
+    # =====================================================
+    # FILTER
+    # =====================================================
+
+    if ad_search:
+
+        query = ad_search.lower()
+
+        filtered_ads = []
+
+        for ad in ads:
+
+            searchable = " ".join([
+                str(ad.get("username", "")),
+                str(ad.get("message", "")),
+                str(ad.get("offering", "")),
+                str(ad.get("looking_for", ""))
+            ]).lower()
+
+            if query in searchable:
+
+                filtered_ads.append(ad)
+
+        ads = filtered_ads
+
+    st.subheader(
+        f"📢 Active Ads ({len(ads)})"
+    )
+
+    # =====================================================
+    # DISPLAY ADS
+    # =====================================================
+
+    for ad in ads:
+
+        with st.container(border=True):
+
+            st.subheader(
+                f'👤 {ad["username"]}'
+            )
+
+            c1, c2 = st.columns(2)
+
+            with c1:
+
+                st.markdown("### 🟦 Offering")
+
+                for item in ad.get("offering", []):
+
+                    st.write(f"• {item}")
+
+            with c2:
+
+                st.markdown("### 🟥 Looking For")
+
+                for item in ad.get("looking_for", []):
+
+                    st.write(f"• {item}")
+
+            if ad.get("message"):
+
+                st.info(
+                    f'💬 {ad["message"]}'
+                )
+
+            st.caption(
+                f'Posted: {ad.get("created_at", "")}'
+            )
+
+            c1, c2 = st.columns(2)
+
+            with c1:
+
+                if st.button(
+                    "💬 Message User",
+                    key=f"message_ad_{ad['id']}",
+                    use_container_width=True
+                ):
+
+                    st.session_state.selected_ad_id = ad["id"]
+
+                    st.session_state.selected_ad_user = (
+                        ad["username"]
+                    )
+
+                    st.session_state.selected_ad_owner = (
+                        ad["user_id"]
+                    )
+
+                    st.session_state.requested_page = (
+                        "💬 Messages"
+                    )
+
+                    st.rerun()
+
+            with c2:
+
+                if ad["user_id"] == get_user_id():
+
+                    if st.button(
+                        "🗑️ Delete Ad",
+                        key=f"delete_ad_{ad['id']}",
+                        use_container_width=True
+                    ):
+
+                        try:
+
+                            (
+                                supabase
+                                .table("trade_ads")
+                                .delete()
+                                .eq("id", ad["id"])
+                                .eq(
+                                    "user_id",
+                                    get_user_id()
+                                )
+                                .execute()
+                            )
+
+                            st.success(
+                                "Ad deleted."
+                            )
+
+                            st.rerun()
+
+                        except Exception as e:
+
+                            st.error(
+                                f"❌ Delete failed: {e}"
+                            )
+
+# =========================================================
+# 💬 MESSAGES
+# =========================================================
+
+elif page == "💬 Messages":
+
+    st.header("💬 Messages")
+
+    if not require_account():
+
+        st.stop()
+
+    my_id = get_user_id()
+
+    # =====================================================
+    # SELECTED AD
+    # =====================================================
+
+    selected_ad_id = st.session_state.get(
+        "selected_ad_id"
+    )
+
+    # =====================================================
+    # SHOW CONVERSATIONS
+    # =====================================================
+
+    st.subheader("💬 Your Conversations")
+
+    try:
+
+        sent = (
+            supabase
+            .table("trade_messages")
+            .select("*")
+            .eq("sender_id", my_id)
+            .order("created_at", desc=True)
+            .execute()
+        ).data or []
+
+        received = (
+            supabase
+            .table("trade_messages")
+            .select("*")
+            .eq("receiver_id", my_id)
+            .order("created_at", desc=True)
+            .execute()
+        ).data or []
+
+        all_messages = sent + received
+
+        conversations = {}
+
+        for message in all_messages:
+
+            ad_id = message["ad_id"]
+
+            if ad_id not in conversations:
+
+                conversations[ad_id] = message
+
+        if not conversations:
+
+            st.info(
+                "📭 You don't have any conversations yet."
+            )
+
+        else:
+
+            for ad_id, message in conversations.items():
+
+                other_user = (
+                    message["sender_name"]
+                    if message["sender_id"] != my_id
+                    else message.get("receiver_id", "User")
+                )
+
+                if st.button(
+                    f"💬 Trade Ad #{ad_id}",
+                    key=f"conversation_{ad_id}",
+                    use_container_width=True
+                ):
+
+                    st.session_state.selected_ad_id = ad_id
+                    st.rerun()
+
+    except Exception as e:
+
+        st.error(
+            f"❌ Could not load messages: {e}"
+        )
+
+    # =====================================================
+    # ACTIVE CHAT
+    # =====================================================
+
+    if selected_ad_id:
+
+        st.divider()
+
+        st.subheader(
+            f"💬 Chat — Trade Ad #{selected_ad_id}"
+        )
+
+        try:
+
+            ad_response = (
+                supabase
+                .table("trade_ads")
+                .select("*")
+                .eq("id", selected_ad_id)
+                .single()
+                .execute()
+            )
+
+            ad = ad_response.data
+
+            if not ad:
+
+                st.error("Trade ad not found.")
+                st.stop()
+
+            if ad["user_id"] == my_id:
+
+                other_user_id = None
+
+                # Find other participant
+                msgs = (
+                    supabase
+                    .table("trade_messages")
+                    .select("*")
+                    .eq("ad_id", selected_ad_id)
+                    .order("created_at")
+                    .execute()
+                ).data or []
+
+                for msg in msgs:
+
+                    if msg["sender_id"] != my_id:
+
+                        other_user_id = msg["sender_id"]
+                        break
+
+            else:
+
+                other_user_id = ad["user_id"]
+
+            # =================================================
+            # LOAD CHAT
+            # =================================================
+
+            messages = (
+                supabase
+                .table("trade_messages")
+                .select("*")
+                .eq("ad_id", selected_ad_id)
+                .order("created_at")
+                .execute()
+            ).data or []
+
+            for msg in messages:
+
+                is_me = (
+                    msg["sender_id"] == my_id
+                )
+
+                with st.chat_message(
+                    "user" if is_me else "assistant"
+                ):
+
+                    st.write(
+                        msg["message"]
+                    )
+
+                    st.caption(
+                        msg["sender_name"]
+                    )
+
+            # =================================================
+            # MESSAGE INPUT
+            # =================================================
+
+            new_message = st.chat_input(
+                "Type your message..."
+            )
+
+            if new_message:
+
+                new_message = new_message.strip()
+
+                if not new_message:
+
+                    st.warning(
+                        "Message cannot be empty."
+                    )
+
+                elif not other_user_id:
+
+                    st.error(
+                        "There is nobody to message yet."
+                    )
+
+                else:
+
+                    try:
+
+                        supabase.table(
+                            "trade_messages"
+                        ).insert({
+                            "ad_id": selected_ad_id,
+                            "sender_id": my_id,
+                            "sender_name": get_username(),
+                            "receiver_id": other_user_id,
+                            "message": new_message
+                        }).execute()
+
+                        st.rerun()
+
+                    except Exception as e:
+
+                        st.error(
+                            f"❌ Could not send message: {e}"
+                        )
+
+        except Exception as e:
+
+            st.error(
+                f"❌ Could not open chat: {e}"
+            )
+
 
 # =========================================================
 # MARKET
@@ -1744,6 +2589,234 @@ CURRENT CONVERSATION:
             "📦 Items Available to AI",
             len(ai_items)
         )
+
+# =========================================================
+# 👤 ACCOUNT
+# =========================================================
+
+elif page == "👤 Account":
+
+    st.header("👤 Trading Vault Account")
+
+    if is_logged_in():
+
+        st.success("🟢 You are logged in.")
+
+        st.write(
+            f"**Username:** {get_username()}"
+        )
+
+        user_id = get_user_id()
+
+        st.caption(
+            f"Account ID: {user_id}"
+        )
+
+        st.divider()
+
+        if st.button(
+            "🚪 Logout",
+            use_container_width=True
+        ):
+
+            try:
+
+                supabase.auth.sign_out()
+
+            except Exception:
+                pass
+
+            st.session_state.user = None
+            st.session_state.auth_session = None
+
+            st.success("Logged out successfully.")
+
+            st.rerun()
+
+    else:
+
+        tab1, tab2 = st.tabs(
+            [
+                "🔐 Login",
+                "📝 Create Account"
+            ]
+        )
+
+        # =================================================
+        # LOGIN
+        # =================================================
+
+        with tab1:
+
+            st.subheader("🔐 Login")
+
+            login_email = st.text_input(
+                "Email",
+                key="login_email"
+            )
+
+            login_password = st.text_input(
+                "Password",
+                type="password",
+                key="login_password"
+            )
+
+            if st.button(
+                "🔐 Login",
+                use_container_width=True,
+                key="login_button"
+            ):
+
+                if not login_email or not login_password:
+
+                    st.error(
+                        "Please enter your email and password."
+                    )
+
+                else:
+
+                    try:
+
+                        response = (
+                            supabase.auth
+                            .sign_in_with_password({
+                                "email": login_email,
+                                "password": login_password
+                            })
+                        )
+
+                        st.session_state.auth_session = (
+                            response.session
+                        )
+
+                        st.session_state.user = (
+                            response.user
+                        )
+
+                        st.success(
+                            "✅ Login successful!"
+                        )
+
+                        st.rerun()
+
+                    except Exception as e:
+
+                        st.error(
+                            f"❌ Login failed: {e}"
+                        )
+
+        # =================================================
+        # CREATE ACCOUNT
+        # =================================================
+
+        with tab2:
+
+            st.subheader("📝 Create Account")
+
+            signup_username = st.text_input(
+                "Username",
+                key="signup_username"
+            )
+
+            signup_email = st.text_input(
+                "Email",
+                key="signup_email"
+            )
+
+            signup_password = st.text_input(
+                "Password",
+                type="password",
+                key="signup_password"
+            )
+
+            signup_confirm = st.text_input(
+                "Confirm Password",
+                type="password",
+                key="signup_confirm"
+            )
+
+            if st.button(
+                "📝 Create Account",
+                use_container_width=True,
+                key="signup_button"
+            ):
+
+                if not signup_username:
+
+                    st.error(
+                        "Please enter a username."
+                    )
+
+                elif not signup_email:
+
+                    st.error(
+                        "Please enter an email."
+                    )
+
+                elif len(signup_password) < 6:
+
+                    st.error(
+                        "Password must be at least 6 characters."
+                    )
+
+                elif signup_password != signup_confirm:
+
+                    st.error(
+                        "Passwords do not match."
+                    )
+
+                else:
+
+                    try:
+
+                        response = (
+                            supabase.auth
+                            .sign_up({
+                                "email": signup_email,
+                                "password": signup_password,
+                                "options": {
+                                    "data": {
+                                        "username":
+                                            signup_username
+                                    }
+                                }
+                            })
+                        )
+
+                        if response.user:
+
+                            if response.session:
+
+                                st.session_state.user = (
+                                    response.user
+                                )
+
+                                st.session_state.auth_session = (
+                                    response.session
+                                )
+
+                                st.success(
+                                    "✅ Account created!"
+                                )
+
+                                st.rerun()
+
+                            else:
+
+                                st.success(
+                                    "✅ Account created!"
+                                )
+
+                                st.info(
+                                    "Check your email to confirm your account, "
+                                    "then log in."
+                                )
+
+                    except Exception as e:
+
+                        st.error(
+                            f"❌ Account creation failed: {e}"
+                        )
 
 
 # =========================================================
