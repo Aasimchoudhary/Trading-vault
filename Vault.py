@@ -183,6 +183,10 @@ FRUITS = [
     {"name": "Yeti", "value": 130_000_000, "demand": 7,
      "rarity": "Mythical", "type": "Beast", "role": "PvP / Grinding"},
 
+    {"name": "Magnet", "value": 1_050_000_000, "demand": 8.9,
+     "rarity": "Mythical", "type": "Beast", "role": "PvP"},
+
+
     {"name": "Kitsune", "value": 660_000_000, "demand": 10,
      "rarity": "Mythical", "type": "Beast", "role": "All-Rounder"},
 
@@ -205,6 +209,7 @@ PERMANENTS = [
 
     {"name": "Perm Dragon", "value": 10_240_000_000, "demand": 10, "robux": 5000},
     {"name": "Perm Kitsune", "value": 6_240_000_000, "demand": 10, "robux": 4000},
+    {"name": "Perm Magnet", "value": 4_970_000_000, "demand": 10, "robux": 3500},
     {"name": "Perm Tiger", "value": 4_230_000_000, "demand": 9, "robux": 3000},
     {"name": "Perm Control", "value": 4_980_000_000, "demand": 8, "robux": 4000},
     {"name": "Perm Dough", "value": 4_755_000_000, "demand": 9.8, "robux": 2400},
@@ -233,6 +238,11 @@ PERMANENTS = [
 LIMITEDS = [
 
     {"name": "Galaxy Empyrean Kitsune", "value": 9_960_000_000, "demand": 10},
+    {"name": "Starlight Gravity", "value": 610_000_000, "demand": 8},
+    {"name": "Scarlet Ghost", "value": 25_000_000, "demand": 5},
+    {"name": "Runic Fiend", "value": 2_680_000_000, "demand": 9.1},
+    {"name": "Lime Blade", "value": 21_000_000, "demand": 3},
+    {"name": "Arc Steel Magnet", "value": 4_120_000_000, "demand": 10},
     {"name": "Purple Lightning", "value": 4_680_000_000, "demand": 8},
     {"name": "Super Spirit Pain", "value": 2_910_000_000, "demand": 8},
     {"name": "Red Lightning", "value": 2_610_000_000, "demand": 8},
