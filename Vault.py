@@ -243,6 +243,7 @@ LIMITEDS = [
     {"name": "Runic Fiend", "value": 2_680_000_000, "demand": 9.1},
     {"name": "Lime Blade", "value": 21_000_000, "demand": 3},
     {"name": "Arc Steel Magnet", "value": 4_120_000_000, "demand": 10},
+    {"name": "HellFire Gas", "value": 1_120_000_000, "demand": 10},
     {"name": "Purple Lightning", "value": 4_680_000_000, "demand": 8},
     {"name": "Super Spirit Pain", "value": 2_910_000_000, "demand": 8},
     {"name": "Red Lightning", "value": 2_610_000_000, "demand": 8},
